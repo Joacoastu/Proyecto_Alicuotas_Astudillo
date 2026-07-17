@@ -1,0 +1,148 @@
+------------------------------------------------------------
+-- 05_VISTAS_REPORTES.sql
+-- Proyecto: Sistema Inteligente de Gestión de Alícuotas
+-- Estudiante: Joaquín Astudillo
+------------------------------------------------------------
+
+------------------------------------------------------------
+-- VISTA 1: LISTADO DE DEUDORES
+------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_deudores AS
+SELECT 
+    p.id_propietario,
+    p.apellidos,
+    p.nombres,
+    p.telefono,
+    p.correo,
+    v.id_vivienda,
+    v.numero_vivienda,
+    v.manzana,
+    pe.mes,
+    pe.anio,
+    a.id_alicuota,
+    a.valor,
+    a.estado,
+    a.fecha_limite
+FROM propietario p
+JOIN vivienda v ON p.id_propietario = v.id_propietario
+JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+JOIN periodo pe ON a.id_periodo = pe.id_periodo
+WHERE a.estado IN ('PENDIENTE', 'VENCIDA');
+
+------------------------------------------------------------
+-- VISTA 2: DEUDA TOTAL POR PROPIETARIO
+------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_deuda_propietario AS
+SELECT 
+    p.id_propietario,
+    p.apellidos || ' ' || p.nombres AS propietario,
+    p.telefono,
+    p.correo,
+    v.numero_vivienda,
+    v.manzana,
+    COUNT(a.id_alicuota) AS cuotas_pendientes,
+    SUM(a.valor) AS deuda_total
+FROM propietario p
+JOIN vivienda v ON p.id_propietario = v.id_propietario
+JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+WHERE a.estado IN ('PENDIENTE', 'VENCIDA')
+GROUP BY 
+    p.id_propietario,
+    p.apellidos,
+    p.nombres,
+    p.telefono,
+    p.correo,
+    v.numero_vivienda,
+    v.manzana;
+
+------------------------------------------------------------
+-- VISTA 3: RECAUDACIÓN MENSUAL
+------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_recaudacion_mensual AS
+SELECT 
+    pe.anio,
+    pe.mes,
+    COUNT(pa.id_pago) AS cantidad_pagos,
+    SUM(pa.valor_pagado) AS total_recaudado
+FROM pago pa
+JOIN alicuota a ON pa.id_alicuota = a.id_alicuota
+JOIN periodo pe ON a.id_periodo = pe.id_periodo
+GROUP BY pe.anio, pe.mes;
+
+------------------------------------------------------------
+-- VISTA 4: ESTADO GENERAL DE ALÍCUOTAS
+------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_estado_alicuotas AS
+SELECT 
+    pe.anio,
+    pe.mes,
+    a.estado,
+    COUNT(a.id_alicuota) AS cantidad,
+    SUM(a.valor) AS valor_total
+FROM alicuota a
+JOIN periodo pe ON a.id_periodo = pe.id_periodo
+GROUP BY pe.anio, pe.mes, a.estado;
+
+------------------------------------------------------------
+-- VISTA 5: SALDO DE CAJA
+------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_saldo_caja AS
+SELECT 
+    SUM(CASE WHEN tipo_movimiento = 'INGRESO' THEN valor ELSE 0 END) AS total_ingresos,
+    SUM(CASE WHEN tipo_movimiento = 'EGRESO' THEN valor ELSE 0 END) AS total_egresos,
+    SUM(CASE 
+            WHEN tipo_movimiento = 'INGRESO' THEN valor
+            WHEN tipo_movimiento = 'EGRESO' THEN -valor
+        END) AS saldo_actual
+FROM caja_movimiento;
+
+------------------------------------------------------------
+-- VISTA 6: MOVIMIENTOS DE CAJA DETALLADOS
+------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_movimientos_caja AS
+SELECT 
+    id_movimiento,
+    fecha_movimiento,
+    tipo_movimiento,
+    concepto,
+    valor,
+    id_pago,
+    id_egreso
+FROM caja_movimiento;
+
+------------------------------------------------------------
+-- VISTA 7: TOP 10 DEUDORES
+------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_top_deudores AS
+SELECT *
+FROM (
+    SELECT 
+        p.apellidos || ' ' || p.nombres AS propietario,
+        v.numero_vivienda,
+        v.manzana,
+        COUNT(a.id_alicuota) AS cuotas_pendientes,
+        SUM(a.valor) AS deuda_total
+    FROM propietario p
+    JOIN vivienda v ON p.id_propietario = v.id_propietario
+    JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+    WHERE a.estado IN ('PENDIENTE', 'VENCIDA')
+    GROUP BY p.apellidos, p.nombres, v.numero_vivienda, v.manzana
+    ORDER BY deuda_total DESC
+)
+WHERE ROWNUM <= 10;
+
+
+
+
+
+SELECT * FROM vw_deudores;
+
+SELECT * FROM vw_deuda_propietario
+ORDER BY deuda_total DESC;
+
+SELECT * FROM vw_recaudacion_mensual
+ORDER BY anio, mes;
+
+SELECT * FROM vw_saldo_caja;
+
+SELECT * FROM vw_top_deudores;

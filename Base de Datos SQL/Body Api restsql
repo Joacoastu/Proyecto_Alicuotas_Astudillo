@@ -1,0 +1,184 @@
+------------------------------------------------------------
+-- 11_API_REST_JSON_BODY.sql
+-- Endpoints REST usando Body JSON en Postman
+-- Proyecto: Sistema Inteligente de Gestión de Alícuotas
+-- Estudiante: Joaquín Astudillo
+------------------------------------------------------------
+
+------------------------------------------------------------
+-- POST: CREAR PROPIETARIO CON BODY JSON
+-- URL: /ords/alicuotas/api/propietarios/crear/
+------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/crear/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/crear/',
+        p_method      => 'POST',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_cedula    VARCHAR2(10);
+                v_nombres   VARCHAR2(100);
+                v_apellidos VARCHAR2(100);
+                v_telefono  VARCHAR2(20);
+                v_correo    VARCHAR2(100);
+            BEGIN
+                v_cedula    := JSON_VALUE(:body_text, '$.cedula');
+                v_nombres   := JSON_VALUE(:body_text, '$.nombres');
+                v_apellidos := JSON_VALUE(:body_text, '$.apellidos');
+                v_telefono  := JSON_VALUE(:body_text, '$.telefono');
+                v_correo    := JSON_VALUE(:body_text, '$.correo');
+
+                INSERT INTO propietario (
+                    cedula,
+                    nombres,
+                    apellidos,
+                    telefono,
+                    correo,
+                    estado
+                ) VALUES (
+                    v_cedula,
+                    v_nombres,
+                    v_apellidos,
+                    v_telefono,
+                    v_correo,
+                    'ACTIVO'
+                );
+
+                COMMIT;
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+------------------------------------------------------------
+-- PUT: ACTUALIZAR PROPIETARIO CON BODY JSON
+-- URL: /ords/alicuotas/api/propietarios/actualizar/
+------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/actualizar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/actualizar/',
+        p_method      => 'PUT',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id        NUMBER;
+                v_nombres   VARCHAR2(100);
+                v_apellidos VARCHAR2(100);
+                v_telefono  VARCHAR2(20);
+                v_correo    VARCHAR2(100);
+                v_estado    VARCHAR2(15);
+            BEGIN
+                v_id        := TO_NUMBER(JSON_VALUE(:body_text, '$.id_propietario'));
+                v_nombres   := JSON_VALUE(:body_text, '$.nombres');
+                v_apellidos := JSON_VALUE(:body_text, '$.apellidos');
+                v_telefono  := JSON_VALUE(:body_text, '$.telefono');
+                v_correo    := JSON_VALUE(:body_text, '$.correo');
+                v_estado    := JSON_VALUE(:body_text, '$.estado');
+
+                UPDATE propietario
+                SET 
+                    nombres   = NVL(v_nombres, nombres),
+                    apellidos = NVL(v_apellidos, apellidos),
+                    telefono  = NVL(v_telefono, telefono),
+                    correo    = NVL(v_correo, correo),
+                    estado    = NVL(v_estado, estado)
+                WHERE id_propietario = v_id;
+
+                COMMIT;
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+------------------------------------------------------------
+-- DELETE: INACTIVAR PROPIETARIO CON BODY JSON
+-- URL: /ords/alicuotas/api/propietarios/eliminar/
+------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/eliminar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/eliminar/',
+        p_method      => 'DELETE',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id NUMBER;
+            BEGIN
+                v_id := TO_NUMBER(JSON_VALUE(:body_text, '$.id_propietario'));
+
+                UPDATE propietario
+                SET estado = 'INACTIVO'
+                WHERE id_propietario = v_id;
+
+                COMMIT;
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+------------------------------------------------------------
+-- POST: REGISTRAR PAGO CON BODY JSON
+-- URL: /ords/alicuotas/api/pagos/registrar/
+------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'pagos/registrar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'pagos/registrar/',
+        p_method      => 'POST',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id_alicuota  NUMBER;
+                v_valor_pagado NUMBER;
+                v_metodo_pago  VARCHAR2(30);
+                v_referencia   VARCHAR2(80);
+            BEGIN
+                v_id_alicuota  := TO_NUMBER(JSON_VALUE(:body_text, '$.id_alicuota'));
+                v_valor_pagado := TO_NUMBER(JSON_VALUE(:body_text, '$.valor_pagado'));
+                v_metodo_pago  := JSON_VALUE(:body_text, '$.metodo_pago');
+                v_referencia   := JSON_VALUE(:body_text, '$.referencia');
+
+                pr_registrar_pago(
+                    p_id_alicuota  => v_id_alicuota,
+                    p_valor_pagado => v_valor_pagado,
+                    p_metodo_pago  => v_metodo_pago,
+                    p_referencia   => v_referencia
+                );
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/

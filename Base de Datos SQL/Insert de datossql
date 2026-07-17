@@ -1,0 +1,435 @@
+------------------------------------------------------------
+-- 02_INSERTS_DATASET_GRANDE.sql
+-- Proyecto: Sistema Inteligente de Gestión de Alícuotas
+-- Estudiante: Joaquín Astudillo
+------------------------------------------------------------
+
+------------------------------------------------------------
+-- LIMPIEZA DE DATOS
+-- Se eliminan primero las tablas hijas para evitar errores FK.
+------------------------------------------------------------
+DELETE FROM consulta_ia;
+DELETE FROM caja_movimiento;
+DELETE FROM pago;
+DELETE FROM egreso;
+DELETE FROM alicuota;
+DELETE FROM periodo;
+DELETE FROM vivienda;
+DELETE FROM propietario;
+DELETE FROM urbanizacion;
+
+COMMIT;
+
+------------------------------------------------------------
+-- INSERCIÓN MASIVA DE DATOS
+------------------------------------------------------------
+DECLARE
+    v_id_urbanizacion urbanizacion.id_urbanizacion%TYPE;
+    v_id_propietario  propietario.id_propietario%TYPE;
+    v_id_vivienda     vivienda.id_vivienda%TYPE;
+    v_id_periodo      periodo.id_periodo%TYPE;
+    v_id_alicuota     alicuota.id_alicuota%TYPE;
+    v_id_pago         pago.id_pago%TYPE;
+    v_id_egreso       egreso.id_egreso%TYPE;
+
+    v_nombre          VARCHAR2(100);
+    v_apellido        VARCHAR2(100);
+    v_manzana         VARCHAR2(20);
+    v_estado_alicuota VARCHAR2(15);
+    v_metodo_pago     VARCHAR2(30);
+    v_valor_alicuota  NUMBER(10,2);
+    v_fecha_limite    DATE;
+BEGIN
+    --------------------------------------------------------
+    -- 1. URBANIZACIÓN
+    --------------------------------------------------------
+    INSERT INTO urbanizacion (
+        nombre, direccion, ciudad, telefono, correo
+    ) VALUES (
+        'Urbanización Los Jardines del Río',
+        'Av. Primero de Mayo y Los Cedros',
+        'Cuenca',
+        '0999999999',
+        'administracion@jardinesdelrio.com'
+    )
+    RETURNING id_urbanizacion INTO v_id_urbanizacion;
+
+    --------------------------------------------------------
+    -- 2. PERIODOS DEL AÑO 2026
+    --------------------------------------------------------
+    FOR m IN 1..12 LOOP
+        INSERT INTO periodo (mes, anio, estado)
+        VALUES (
+            m,
+            2026,
+            CASE 
+                WHEN m <= 8 THEN 'CERRADO'
+                ELSE 'ABIERTO'
+            END
+        );
+    END LOOP;
+
+    --------------------------------------------------------
+    -- 3. 50 PROPIETARIOS + 50 VIVIENDAS
+    --------------------------------------------------------
+    FOR i IN 1..50 LOOP
+
+        v_nombre :=
+            CASE MOD(i, 10)
+                WHEN 0 THEN 'Carlos'
+                WHEN 1 THEN 'Ana'
+                WHEN 2 THEN 'María'
+                WHEN 3 THEN 'Luis'
+                WHEN 4 THEN 'Diana'
+                WHEN 5 THEN 'Pedro'
+                WHEN 6 THEN 'Lucía'
+                WHEN 7 THEN 'Jorge'
+                WHEN 8 THEN 'Paola'
+                ELSE 'Fernando'
+            END;
+
+        v_apellido :=
+            CASE i
+                WHEN 1 THEN 'Astudillo'
+                WHEN 2 THEN 'Alvarado'
+                WHEN 3 THEN 'Andrade'
+                WHEN 4 THEN 'Aguilar'
+                WHEN 5 THEN 'Arévalo'
+                WHEN 6 THEN 'Arias'
+                WHEN 7 THEN 'Avila'
+                WHEN 8 THEN 'Almeida'
+                WHEN 9 THEN 'Bravo'
+                WHEN 10 THEN 'Barrera'
+                WHEN 11 THEN 'Cárdenas'
+                WHEN 12 THEN 'Castro'
+                WHEN 13 THEN 'Calle'
+                WHEN 14 THEN 'Crespo'
+                WHEN 15 THEN 'Delgado'
+                WHEN 16 THEN 'Díaz'
+                WHEN 17 THEN 'Espinoza'
+                WHEN 18 THEN 'Encalada'
+                WHEN 19 THEN 'Fernández'
+                WHEN 20 THEN 'Flores'
+                WHEN 21 THEN 'García'
+                WHEN 22 THEN 'González'
+                WHEN 23 THEN 'Guamán'
+                WHEN 24 THEN 'Herrera'
+                WHEN 25 THEN 'Hidalgo'
+                WHEN 26 THEN 'Jiménez'
+                WHEN 27 THEN 'Jara'
+                WHEN 28 THEN 'León'
+                WHEN 29 THEN 'López'
+                WHEN 30 THEN 'Maldonado'
+                WHEN 31 THEN 'Martínez'
+                WHEN 32 THEN 'Méndez'
+                WHEN 33 THEN 'Mora'
+                WHEN 34 THEN 'Morales'
+                WHEN 35 THEN 'Narváez'
+                WHEN 36 THEN 'Orellana'
+                WHEN 37 THEN 'Ortiz'
+                WHEN 38 THEN 'Pacheco'
+                WHEN 39 THEN 'Paredes'
+                WHEN 40 THEN 'Pérez'
+                WHEN 41 THEN 'Quinde'
+                WHEN 42 THEN 'Ramírez'
+                WHEN 43 THEN 'Reinoso'
+                WHEN 44 THEN 'Rivera'
+                WHEN 45 THEN 'Rodríguez'
+                WHEN 46 THEN 'Salazar'
+                WHEN 47 THEN 'Sánchez'
+                WHEN 48 THEN 'Torres'
+                WHEN 49 THEN 'Vásquez'
+                ELSE 'Zambrano'
+            END;
+
+        INSERT INTO propietario (
+            cedula, nombres, apellidos, telefono, correo, estado
+        ) VALUES (
+            '010' || LPAD(i, 7, '0'),
+            v_nombre,
+            v_apellido,
+            '099' || LPAD(i, 7, '0'),
+            LOWER(v_nombre || '.' || REPLACE(v_apellido, ' ', '') || i || '@correo.com'),
+            CASE 
+                WHEN MOD(i, 17) = 0 THEN 'INACTIVO'
+                ELSE 'ACTIVO'
+            END
+        )
+        RETURNING id_propietario INTO v_id_propietario;
+
+        v_manzana :=
+            CASE 
+                WHEN i BETWEEN 1 AND 10 THEN 'A'
+                WHEN i BETWEEN 11 AND 20 THEN 'B'
+                WHEN i BETWEEN 21 AND 30 THEN 'C'
+                WHEN i BETWEEN 31 AND 40 THEN 'D'
+                ELSE 'E'
+            END;
+
+        INSERT INTO vivienda (
+            id_urbanizacion,
+            id_propietario,
+            numero_vivienda,
+            manzana,
+            tipo_vivienda,
+            estado
+        ) VALUES (
+            v_id_urbanizacion,
+            v_id_propietario,
+            v_manzana || '-' || LPAD(i, 2, '0'),
+            v_manzana,
+            CASE 
+                WHEN MOD(i, 10) = 0 THEN 'LOCAL'
+                WHEN MOD(i, 7) = 0 THEN 'DEPARTAMENTO'
+                ELSE 'CASA'
+            END,
+            CASE 
+                WHEN MOD(i, 13) = 0 THEN 'DESOCUPADA'
+                WHEN MOD(i, 19) = 0 THEN 'EN_CONSTRUCCION'
+                ELSE 'HABITADA'
+            END
+        )
+        RETURNING id_vivienda INTO v_id_vivienda;
+
+        ----------------------------------------------------
+        -- 4. ALICUOTAS DE ENERO A DICIEMBRE POR VIVIENDA
+        ----------------------------------------------------
+        FOR m IN 1..12 LOOP
+
+            SELECT id_periodo
+            INTO v_id_periodo
+            FROM periodo
+            WHERE mes = m
+              AND anio = 2026;
+
+            v_fecha_limite := ADD_MONTHS(DATE '2026-01-10', m - 1);
+
+            v_valor_alicuota :=
+                CASE 
+                    WHEN MOD(i, 10) = 0 THEN 60.00
+                    WHEN MOD(i, 7) = 0 THEN 50.00
+                    ELSE 45.00
+                END;
+
+            v_estado_alicuota :=
+                CASE
+                    WHEN m IN (9, 12) AND UPPER(v_apellido) LIKE 'A%' THEN
+                        CASE 
+                            WHEN MOD(i, 2) = 0 THEN 'PENDIENTE'
+                            ELSE 'VENCIDA'
+                        END
+                    WHEN MOD(i + m, 5) = 0 THEN 'PENDIENTE'
+                    WHEN MOD(i + m, 7) = 0 THEN 'VENCIDA'
+                    ELSE 'PAGADA'
+                END;
+
+            INSERT INTO alicuota (
+                id_vivienda,
+                id_periodo,
+                valor,
+                fecha_emision,
+                fecha_limite,
+                estado,
+                observacion
+            ) VALUES (
+                v_id_vivienda,
+                v_id_periodo,
+                v_valor_alicuota,
+                v_fecha_limite - 10,
+                v_fecha_limite,
+                v_estado_alicuota,
+                'Alícuota mensual generada automáticamente'
+            )
+            RETURNING id_alicuota INTO v_id_alicuota;
+
+            ------------------------------------------------
+            -- 5. PAGOS Y MOVIMIENTOS DE CAJA
+            -- Solo para alícuotas pagadas.
+            ------------------------------------------------
+            IF v_estado_alicuota = 'PAGADA' THEN
+
+                v_metodo_pago :=
+                    CASE MOD(i + m, 4)
+                        WHEN 0 THEN 'EFECTIVO'
+                        WHEN 1 THEN 'TRANSFERENCIA'
+                        WHEN 2 THEN 'DEPOSITO'
+                        ELSE 'TARJETA'
+                    END;
+
+                INSERT INTO pago (
+                    id_alicuota,
+                    fecha_pago,
+                    valor_pagado,
+                    metodo_pago,
+                    referencia,
+                    observacion
+                ) VALUES (
+                    v_id_alicuota,
+                    v_fecha_limite - MOD(i, 5),
+                    v_valor_alicuota,
+                    v_metodo_pago,
+                    'REF-' || LPAD(i, 2, '0') || '-' || LPAD(m, 2, '0'),
+                    'Pago registrado para la alícuota mensual'
+                )
+                RETURNING id_pago INTO v_id_pago;
+
+                INSERT INTO caja_movimiento (
+                    fecha_movimiento,
+                    tipo_movimiento,
+                    concepto,
+                    valor,
+                    id_pago
+                ) VALUES (
+                    v_fecha_limite - MOD(i, 5),
+                    'INGRESO',
+                    'Ingreso por pago de alícuota mensual',
+                    v_valor_alicuota,
+                    v_id_pago
+                );
+
+            END IF;
+
+        END LOOP;
+
+    END LOOP;
+
+    --------------------------------------------------------
+    -- 6. EGRESOS Y MOVIMIENTOS DE CAJA
+    --------------------------------------------------------
+    FOR e IN 1..20 LOOP
+        INSERT INTO egreso (
+            fecha_egreso,
+            categoria,
+            descripcion,
+            valor,
+            responsable
+        ) VALUES (
+            ADD_MONTHS(DATE '2026-01-15', MOD(e, 12)),
+            CASE MOD(e, 5)
+                WHEN 0 THEN 'Mantenimiento'
+                WHEN 1 THEN 'Seguridad'
+                WHEN 2 THEN 'Limpieza'
+                WHEN 3 THEN 'Jardinería'
+                ELSE 'Servicios básicos'
+            END,
+            CASE MOD(e, 5)
+                WHEN 0 THEN 'Reparación y mantenimiento de áreas comunes'
+                WHEN 1 THEN 'Pago mensual de servicio de seguridad'
+                WHEN 2 THEN 'Compra de insumos de limpieza'
+                WHEN 3 THEN 'Mantenimiento de jardines y áreas verdes'
+                ELSE 'Pago de agua, luz u otros servicios'
+            END,
+            CASE MOD(e, 5)
+                WHEN 0 THEN 180.00
+                WHEN 1 THEN 450.00
+                WHEN 2 THEN 95.00
+                WHEN 3 THEN 130.00
+                ELSE 210.00
+            END,
+            'Administrador'
+        )
+        RETURNING id_egreso INTO v_id_egreso;
+
+        INSERT INTO caja_movimiento (
+            fecha_movimiento,
+            tipo_movimiento,
+            concepto,
+            valor,
+            id_egreso
+        ) VALUES (
+            ADD_MONTHS(DATE '2026-01-15', MOD(e, 12)),
+            'EGRESO',
+            'Egreso operativo de la urbanización',
+            CASE MOD(e, 5)
+                WHEN 0 THEN 180.00
+                WHEN 1 THEN 450.00
+                WHEN 2 THEN 95.00
+                WHEN 3 THEN 130.00
+                ELSE 210.00
+            END,
+            v_id_egreso
+        );
+    END LOOP;
+
+    --------------------------------------------------------
+    -- 7. CONSULTAS IA DE EJEMPLO
+    --------------------------------------------------------
+    INSERT INTO consulta_ia (pregunta_usuario, sql_generado, estado)
+    VALUES (
+        'Dame un listado de las personas que deben en septiembre y diciembre y que comiencen con el apellido A',
+        'SELECT p.apellidos, p.nombres, v.numero_vivienda, pe.mes, pe.anio, a.valor, a.estado
+         FROM propietario p
+         JOIN vivienda v ON p.id_propietario = v.id_propietario
+         JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+         JOIN periodo pe ON a.id_periodo = pe.id_periodo
+         WHERE a.estado IN (''PENDIENTE'', ''VENCIDA'')
+           AND pe.mes IN (9, 12)
+           AND UPPER(p.apellidos) LIKE ''A%''
+         ORDER BY p.apellidos, pe.mes',
+        'GENERADA'
+    );
+
+    INSERT INTO consulta_ia (pregunta_usuario, sql_generado, estado)
+    VALUES (
+        'Muéstrame el total recaudado por mes durante el año 2026',
+        'SELECT pe.mes, pe.anio, SUM(pa.valor_pagado) AS total_recaudado
+         FROM pago pa
+         JOIN alicuota a ON pa.id_alicuota = a.id_alicuota
+         JOIN periodo pe ON a.id_periodo = pe.id_periodo
+         GROUP BY pe.mes, pe.anio
+         ORDER BY pe.anio, pe.mes',
+        'GENERADA'
+    );
+
+    INSERT INTO consulta_ia (pregunta_usuario, sql_generado, estado)
+    VALUES (
+        'Cuáles son las viviendas con mayor deuda acumulada',
+        'SELECT v.numero_vivienda, p.apellidos, p.nombres, SUM(a.valor) AS deuda_total
+         FROM propietario p
+         JOIN vivienda v ON p.id_propietario = v.id_propietario
+         JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+         WHERE a.estado IN (''PENDIENTE'', ''VENCIDA'')
+         GROUP BY v.numero_vivienda, p.apellidos, p.nombres
+         ORDER BY deuda_total DESC',
+        'GENERADA'
+    );
+
+    INSERT INTO consulta_ia (pregunta_usuario, sql_generado, estado)
+    VALUES (
+        'Dame el saldo de caja considerando ingresos y egresos',
+        'SELECT SUM(CASE WHEN tipo_movimiento = ''INGRESO'' THEN valor ELSE -valor END) AS saldo_caja
+         FROM caja_movimiento',
+        'GENERADA'
+    );
+
+    INSERT INTO consulta_ia (pregunta_usuario, sql_generado, estado)
+    VALUES (
+        'Qué propietarios tienen más de dos alícuotas vencidas',
+        'SELECT p.apellidos, p.nombres, COUNT(*) AS total_vencidas
+         FROM propietario p
+         JOIN vivienda v ON p.id_propietario = v.id_propietario
+         JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+         WHERE a.estado = ''VENCIDA''
+         GROUP BY p.apellidos, p.nombres
+         HAVING COUNT(*) > 2
+         ORDER BY total_vencidas DESC',
+        'GENERADA'
+    );
+
+    COMMIT;
+END;
+/
+
+
+SELECT COUNT(*) AS total_propietarios FROM propietario;
+SELECT COUNT(*) AS total_viviendas FROM vivienda;
+SELECT COUNT(*) AS total_periodos FROM periodo;
+SELECT COUNT(*) AS total_alicuotas FROM alicuota;
+SELECT COUNT(*) AS total_pagos FROM pago;
+SELECT COUNT(*) AS total_egresos FROM egreso;
+SELECT COUNT(*) AS total_movimientos_caja FROM caja_movimiento;
+SELECT COUNT(*) AS total_consultas_ia FROM consulta_ia;
+
+
+
+

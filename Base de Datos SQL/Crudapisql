@@ -1,0 +1,1796 @@
+SET DEFINE OFF;
+
+PROMPT ============================================================
+PROMPT CRUD COMPLETO ORDS - SISTEMA INTELIGENTE DE ALICUOTAS
+PROMPT Ejecutar conectado como: PROY_ALICUOTAS_ASTUDILLO
+PROMPT Base URL: http://localhost:8080/ords/alicuotas/api/
+PROMPT ============================================================
+
+BEGIN
+    ORDS.DEFINE_MODULE(
+        p_module_name    => 'mod_alicuotas_api',
+        p_base_path      => 'api/',
+        p_items_per_page => 25,
+        p_status         => 'PUBLISHED'
+    );
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET info de la API - /info/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'info/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'info/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query_one_row,
+        p_source      => q'[
+SELECT
+    'Sistema Inteligente de Gestión de Alícuotas' AS proyecto,
+    'API REST activa con ORDS' AS estado,
+    'PROY_ALICUOTAS_ASTUDILLO' AS esquema,
+    'Joaquín Astudillo' AS autor,
+    '/urbanizacion/' AS urbanizacion,
+    '/propietarios/' AS propietarios,
+    '/viviendas/' AS viviendas,
+    '/periodos/' AS periodos,
+    '/alicuotas/' AS alicuotas,
+    '/pagos/' AS pagos,
+    '/egresos/' AS egresos,
+    '/caja-movimientos/' AS caja_movimientos,
+    '/auditoria/' AS auditoria,
+    '/consultas-ia/' AS consultas_ia
+FROM dual
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET urbanización - /urbanizacion/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'urbanizacion/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'urbanizacion/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT * FROM urbanizacion ORDER BY id_urbanizacion
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET urbanización por ID - /urbanizacion/:id/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'urbanizacion/:id/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'urbanizacion/:id/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query_one_row,
+        p_source      => q'[
+SELECT * FROM urbanizacion WHERE id_urbanizacion = TO_NUMBER(:id)
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- POST crear urbanización - /urbanizacion/crear/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'urbanizacion/crear/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'urbanizacion/crear/',
+        p_method      => 'POST',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_nombre    VARCHAR2(100);
+                v_direccion VARCHAR2(200);
+                v_ciudad    VARCHAR2(100);
+                v_telefono  VARCHAR2(20);
+                v_correo    VARCHAR2(100);
+            BEGIN
+                v_nombre    := JSON_VALUE(:body_text, '$.nombre');
+                v_direccion := JSON_VALUE(:body_text, '$.direccion');
+                v_ciudad    := JSON_VALUE(:body_text, '$.ciudad');
+                v_telefono  := JSON_VALUE(:body_text, '$.telefono');
+                v_correo    := JSON_VALUE(:body_text, '$.correo');
+
+                INSERT INTO urbanizacion(nombre, direccion, ciudad, telefono, correo)
+                VALUES (v_nombre, v_direccion, v_ciudad, v_telefono, v_correo);
+
+                COMMIT;
+
+                :status_code := 201;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Urbanización creada correctamente"}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- PUT actualizar urbanización - /urbanizacion/actualizar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'urbanizacion/actualizar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'urbanizacion/actualizar/',
+        p_method      => 'PUT',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id        NUMBER;
+                v_nombre    VARCHAR2(100);
+                v_direccion VARCHAR2(200);
+                v_ciudad    VARCHAR2(100);
+                v_telefono  VARCHAR2(20);
+                v_correo    VARCHAR2(100);
+                v_filas     NUMBER;
+            BEGIN
+                v_id        := TO_NUMBER(JSON_VALUE(:body_text, '$.id_urbanizacion'));
+                v_nombre    := JSON_VALUE(:body_text, '$.nombre');
+                v_direccion := JSON_VALUE(:body_text, '$.direccion');
+                v_ciudad    := JSON_VALUE(:body_text, '$.ciudad');
+                v_telefono  := JSON_VALUE(:body_text, '$.telefono');
+                v_correo    := JSON_VALUE(:body_text, '$.correo');
+
+                UPDATE urbanizacion
+                SET nombre    = NVL(v_nombre, nombre),
+                    direccion = NVL(v_direccion, direccion),
+                    ciudad    = NVL(v_ciudad, ciudad),
+                    telefono  = NVL(v_telefono, telefono),
+                    correo    = NVL(v_correo, correo)
+                WHERE id_urbanizacion = v_id;
+
+                v_filas := SQL%ROWCOUNT;
+                COMMIT;
+
+                :status_code := 200;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Urbanización actualizada","filas_afectadas":' || v_filas || '}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- DELETE eliminar urbanización - /urbanizacion/eliminar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'urbanizacion/eliminar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'urbanizacion/eliminar/',
+        p_method      => 'DELETE',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id    NUMBER;
+                v_filas NUMBER;
+            BEGIN
+                v_id := TO_NUMBER(JSON_VALUE(:body_text, '$.id_urbanizacion'));
+
+                DELETE FROM urbanizacion
+                WHERE id_urbanizacion = v_id;
+
+                v_filas := SQL%ROWCOUNT;
+                COMMIT;
+
+                :status_code := 200;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Urbanización eliminada","filas_afectadas":' || v_filas || '}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET propietarios - /propietarios/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT * FROM propietario ORDER BY id_propietario
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET propietario por ID - /propietarios/:id/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/:id/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/:id/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query_one_row,
+        p_source      => q'[
+SELECT * FROM propietario WHERE id_propietario = TO_NUMBER(:id)
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- POST crear propietario - /propietarios/crear/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/crear/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/crear/',
+        p_method      => 'POST',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_cedula    VARCHAR2(20);
+                v_nombres   VARCHAR2(100);
+                v_apellidos VARCHAR2(100);
+                v_telefono  VARCHAR2(20);
+                v_correo    VARCHAR2(100);
+            BEGIN
+                v_cedula    := JSON_VALUE(:body_text, '$.cedula');
+                v_nombres   := JSON_VALUE(:body_text, '$.nombres');
+                v_apellidos := JSON_VALUE(:body_text, '$.apellidos');
+                v_telefono  := JSON_VALUE(:body_text, '$.telefono');
+                v_correo    := JSON_VALUE(:body_text, '$.correo');
+
+                INSERT INTO propietario(cedula, nombres, apellidos, telefono, correo, estado)
+                VALUES (v_cedula, v_nombres, v_apellidos, v_telefono, v_correo, 'ACTIVO');
+
+                COMMIT;
+
+                :status_code := 201;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Propietario creado correctamente"}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- PUT actualizar propietario - /propietarios/actualizar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/actualizar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/actualizar/',
+        p_method      => 'PUT',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id        NUMBER;
+                v_cedula    VARCHAR2(20);
+                v_nombres   VARCHAR2(100);
+                v_apellidos VARCHAR2(100);
+                v_telefono  VARCHAR2(20);
+                v_correo    VARCHAR2(100);
+                v_estado    VARCHAR2(20);
+                v_filas     NUMBER;
+            BEGIN
+                v_id        := TO_NUMBER(JSON_VALUE(:body_text, '$.id_propietario'));
+                v_cedula    := JSON_VALUE(:body_text, '$.cedula');
+                v_nombres   := JSON_VALUE(:body_text, '$.nombres');
+                v_apellidos := JSON_VALUE(:body_text, '$.apellidos');
+                v_telefono  := JSON_VALUE(:body_text, '$.telefono');
+                v_correo    := JSON_VALUE(:body_text, '$.correo');
+                v_estado    := JSON_VALUE(:body_text, '$.estado');
+
+                UPDATE propietario
+                SET cedula    = NVL(v_cedula, cedula),
+                    nombres   = NVL(v_nombres, nombres),
+                    apellidos = NVL(v_apellidos, apellidos),
+                    telefono  = NVL(v_telefono, telefono),
+                    correo    = NVL(v_correo, correo),
+                    estado    = NVL(v_estado, estado)
+                WHERE id_propietario = v_id;
+
+                v_filas := SQL%ROWCOUNT;
+                COMMIT;
+
+                :status_code := 200;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Propietario actualizado","filas_afectadas":' || v_filas || '}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- DELETE inactivar propietario - /propietarios/eliminar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/eliminar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/eliminar/',
+        p_method      => 'DELETE',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id    NUMBER;
+                v_filas NUMBER;
+            BEGIN
+                v_id := TO_NUMBER(JSON_VALUE(:body_text, '$.id_propietario'));
+
+                UPDATE propietario
+                SET estado = 'INACTIVO'
+                WHERE id_propietario = v_id;
+
+                v_filas := SQL%ROWCOUNT;
+                COMMIT;
+
+                :status_code := 200;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Propietario inactivado","filas_afectadas":' || v_filas || '}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET viviendas - /viviendas/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'viviendas/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'viviendas/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT v.*, p.nombres || ' ' || p.apellidos AS propietario, u.nombre AS urbanizacion
+FROM vivienda v
+LEFT JOIN propietario p ON p.id_propietario = v.id_propietario
+LEFT JOIN urbanizacion u ON u.id_urbanizacion = v.id_urbanizacion
+ORDER BY v.id_vivienda
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET vivienda por ID - /viviendas/:id/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'viviendas/:id/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'viviendas/:id/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query_one_row,
+        p_source      => q'[
+SELECT v.*, p.nombres || ' ' || p.apellidos AS propietario, u.nombre AS urbanizacion
+FROM vivienda v
+LEFT JOIN propietario p ON p.id_propietario = v.id_propietario
+LEFT JOIN urbanizacion u ON u.id_urbanizacion = v.id_urbanizacion
+WHERE v.id_vivienda = TO_NUMBER(:id)
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- POST crear vivienda - /viviendas/crear/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'viviendas/crear/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'viviendas/crear/',
+        p_method      => 'POST',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id_urbanizacion NUMBER;
+                v_id_propietario  NUMBER;
+                v_numero          VARCHAR2(30);
+                v_manzana         VARCHAR2(20);
+                v_tipo            VARCHAR2(30);
+                v_estado          VARCHAR2(30);
+            BEGIN
+                v_id_urbanizacion := TO_NUMBER(JSON_VALUE(:body_text, '$.id_urbanizacion'));
+                v_id_propietario  := TO_NUMBER(JSON_VALUE(:body_text, '$.id_propietario'));
+                v_numero          := JSON_VALUE(:body_text, '$.numero_vivienda');
+                v_manzana         := JSON_VALUE(:body_text, '$.manzana');
+                v_tipo            := NVL(JSON_VALUE(:body_text, '$.tipo_vivienda'), 'CASA');
+                v_estado          := NVL(JSON_VALUE(:body_text, '$.estado'), 'HABITADA');
+
+                INSERT INTO vivienda(id_urbanizacion, id_propietario, numero_vivienda, manzana, tipo_vivienda, estado)
+                VALUES (v_id_urbanizacion, v_id_propietario, v_numero, v_manzana, v_tipo, v_estado);
+
+                COMMIT;
+
+                :status_code := 201;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Vivienda creada correctamente"}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- PUT actualizar vivienda - /viviendas/actualizar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'viviendas/actualizar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'viviendas/actualizar/',
+        p_method      => 'PUT',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id              NUMBER;
+                v_id_urbanizacion NUMBER;
+                v_id_propietario  NUMBER;
+                v_numero          VARCHAR2(30);
+                v_manzana         VARCHAR2(20);
+                v_tipo            VARCHAR2(30);
+                v_estado          VARCHAR2(30);
+                v_filas           NUMBER;
+            BEGIN
+                v_id              := TO_NUMBER(JSON_VALUE(:body_text, '$.id_vivienda'));
+                v_id_urbanizacion := TO_NUMBER(JSON_VALUE(:body_text, '$.id_urbanizacion' NULL ON ERROR));
+                v_id_propietario  := TO_NUMBER(JSON_VALUE(:body_text, '$.id_propietario' NULL ON ERROR));
+                v_numero          := JSON_VALUE(:body_text, '$.numero_vivienda');
+                v_manzana         := JSON_VALUE(:body_text, '$.manzana');
+                v_tipo            := JSON_VALUE(:body_text, '$.tipo_vivienda');
+                v_estado          := JSON_VALUE(:body_text, '$.estado');
+
+                UPDATE vivienda
+                SET id_urbanizacion = NVL(v_id_urbanizacion, id_urbanizacion),
+                    id_propietario  = NVL(v_id_propietario, id_propietario),
+                    numero_vivienda = NVL(v_numero, numero_vivienda),
+                    manzana         = NVL(v_manzana, manzana),
+                    tipo_vivienda   = NVL(v_tipo, tipo_vivienda),
+                    estado          = NVL(v_estado, estado)
+                WHERE id_vivienda = v_id;
+
+                v_filas := SQL%ROWCOUNT;
+                COMMIT;
+
+                :status_code := 200;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Vivienda actualizada","filas_afectadas":' || v_filas || '}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- DELETE vivienda lógica - /viviendas/eliminar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'viviendas/eliminar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'viviendas/eliminar/',
+        p_method      => 'DELETE',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id    NUMBER;
+                v_filas NUMBER;
+            BEGIN
+                v_id := TO_NUMBER(JSON_VALUE(:body_text, '$.id_vivienda'));
+
+                UPDATE vivienda
+                SET estado = 'DESOCUPADA'
+                WHERE id_vivienda = v_id;
+
+                v_filas := SQL%ROWCOUNT;
+                COMMIT;
+
+                :status_code := 200;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Vivienda marcada como DESOCUPADA","filas_afectadas":' || v_filas || '}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET periodos - /periodos/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'periodos/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'periodos/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT * FROM periodo ORDER BY anio, mes
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET periodo por ID - /periodos/:id/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'periodos/:id/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'periodos/:id/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query_one_row,
+        p_source      => q'[
+SELECT * FROM periodo WHERE id_periodo = TO_NUMBER(:id)
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- POST crear periodo - /periodos/crear/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'periodos/crear/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'periodos/crear/',
+        p_method      => 'POST',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_mes    NUMBER;
+                v_anio   NUMBER;
+                v_estado VARCHAR2(20);
+            BEGIN
+                v_mes    := TO_NUMBER(JSON_VALUE(:body_text, '$.mes'));
+                v_anio   := TO_NUMBER(JSON_VALUE(:body_text, '$.anio'));
+                v_estado := NVL(JSON_VALUE(:body_text, '$.estado'), 'ABIERTO');
+
+                INSERT INTO periodo(mes, anio, estado)
+                VALUES (v_mes, v_anio, v_estado);
+
+                COMMIT;
+
+                :status_code := 201;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Período creado correctamente"}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- PUT actualizar periodo - /periodos/actualizar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'periodos/actualizar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'periodos/actualizar/',
+        p_method      => 'PUT',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id     NUMBER;
+                v_mes    NUMBER;
+                v_anio   NUMBER;
+                v_estado VARCHAR2(20);
+                v_filas  NUMBER;
+            BEGIN
+                v_id     := TO_NUMBER(JSON_VALUE(:body_text, '$.id_periodo'));
+                v_mes    := TO_NUMBER(JSON_VALUE(:body_text, '$.mes' NULL ON ERROR));
+                v_anio   := TO_NUMBER(JSON_VALUE(:body_text, '$.anio' NULL ON ERROR));
+                v_estado := JSON_VALUE(:body_text, '$.estado');
+
+                UPDATE periodo
+                SET mes = NVL(v_mes, mes),
+                    anio = NVL(v_anio, anio),
+                    estado = NVL(v_estado, estado)
+                WHERE id_periodo = v_id;
+
+                v_filas := SQL%ROWCOUNT;
+                COMMIT;
+
+                :status_code := 200;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Período actualizado","filas_afectadas":' || v_filas || '}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- DELETE/cerrar periodo - /periodos/eliminar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'periodos/eliminar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'periodos/eliminar/',
+        p_method      => 'DELETE',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id    NUMBER;
+                v_filas NUMBER;
+            BEGIN
+                v_id := TO_NUMBER(JSON_VALUE(:body_text, '$.id_periodo'));
+
+                UPDATE periodo
+                SET estado = 'CERRADO'
+                WHERE id_periodo = v_id;
+
+                v_filas := SQL%ROWCOUNT;
+                COMMIT;
+
+                :status_code := 200;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Período cerrado","filas_afectadas":' || v_filas || '}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET alicuotas - /alicuotas/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'alicuotas/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'alicuotas/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT a.*, p.mes, p.anio, v.numero_vivienda, pr.nombres || ' ' || pr.apellidos AS propietario
+FROM alicuota a
+JOIN periodo p ON p.id_periodo = a.id_periodo
+JOIN vivienda v ON v.id_vivienda = a.id_vivienda
+JOIN propietario pr ON pr.id_propietario = v.id_propietario
+ORDER BY a.id_alicuota
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET alicuota por ID - /alicuotas/:id/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'alicuotas/:id/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'alicuotas/:id/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query_one_row,
+        p_source      => q'[
+SELECT a.*, p.mes, p.anio, v.numero_vivienda, pr.nombres || ' ' || pr.apellidos AS propietario
+FROM alicuota a
+JOIN periodo p ON p.id_periodo = a.id_periodo
+JOIN vivienda v ON v.id_vivienda = a.id_vivienda
+JOIN propietario pr ON pr.id_propietario = v.id_propietario
+WHERE a.id_alicuota = TO_NUMBER(:id)
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- POST crear alícuota individual - /alicuotas/crear/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'alicuotas/crear/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'alicuotas/crear/',
+        p_method      => 'POST',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id_vivienda NUMBER;
+                v_id_periodo  NUMBER;
+                v_valor       NUMBER;
+                v_fecha       DATE;
+                v_estado      VARCHAR2(20);
+                v_obs         VARCHAR2(300);
+            BEGIN
+                v_id_vivienda := TO_NUMBER(JSON_VALUE(:body_text, '$.id_vivienda'));
+                v_id_periodo  := TO_NUMBER(JSON_VALUE(:body_text, '$.id_periodo'));
+                v_valor       := TO_NUMBER(JSON_VALUE(:body_text, '$.valor'));
+                v_fecha       := TO_DATE(JSON_VALUE(:body_text, '$.fecha_limite'), 'YYYY-MM-DD');
+                v_estado      := NVL(JSON_VALUE(:body_text, '$.estado'), 'PENDIENTE');
+                v_obs         := JSON_VALUE(:body_text, '$.observacion');
+
+                INSERT INTO alicuota(id_vivienda, id_periodo, valor, fecha_limite, estado, observacion)
+                VALUES (v_id_vivienda, v_id_periodo, v_valor, v_fecha, v_estado, v_obs);
+
+                COMMIT;
+
+                :status_code := 201;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Alícuota creada correctamente"}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- POST generar alícuotas mensuales - /alicuotas/generar-mensual/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'alicuotas/generar-mensual/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'alicuotas/generar-mensual/',
+        p_method      => 'POST',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_mes   NUMBER;
+                v_anio  NUMBER;
+                v_valor NUMBER;
+            BEGIN
+                v_mes   := TO_NUMBER(JSON_VALUE(:body_text, '$.mes'));
+                v_anio  := TO_NUMBER(JSON_VALUE(:body_text, '$.anio'));
+                v_valor := TO_NUMBER(JSON_VALUE(:body_text, '$.valor'));
+
+                pr_generar_alicuotas_mensuales(v_mes, v_anio, v_valor);
+
+                COMMIT;
+
+                :status_code := 201;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Alícuotas generadas para todas las viviendas"}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- PUT actualizar alícuota - /alicuotas/actualizar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'alicuotas/actualizar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'alicuotas/actualizar/',
+        p_method      => 'PUT',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id     NUMBER;
+                v_valor  NUMBER;
+                v_fecha  DATE;
+                v_estado VARCHAR2(20);
+                v_obs    VARCHAR2(300);
+                v_filas  NUMBER;
+            BEGIN
+                v_id     := TO_NUMBER(JSON_VALUE(:body_text, '$.id_alicuota'));
+                v_valor  := TO_NUMBER(JSON_VALUE(:body_text, '$.valor' NULL ON ERROR));
+
+                IF JSON_VALUE(:body_text, '$.fecha_limite') IS NOT NULL THEN
+                    v_fecha := TO_DATE(JSON_VALUE(:body_text, '$.fecha_limite'), 'YYYY-MM-DD');
+                END IF;
+
+                v_estado := JSON_VALUE(:body_text, '$.estado');
+                v_obs    := JSON_VALUE(:body_text, '$.observacion');
+
+                UPDATE alicuota
+                SET valor = NVL(v_valor, valor),
+                    fecha_limite = NVL(v_fecha, fecha_limite),
+                    estado = NVL(v_estado, estado),
+                    observacion = NVL(v_obs, observacion)
+                WHERE id_alicuota = v_id;
+
+                v_filas := SQL%ROWCOUNT;
+                COMMIT;
+
+                :status_code := 200;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Alícuota actualizada","filas_afectadas":' || v_filas || '}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- DELETE/anular alícuota - /alicuotas/anular/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'alicuotas/anular/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'alicuotas/anular/',
+        p_method      => 'DELETE',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id    NUMBER;
+                v_filas NUMBER;
+            BEGIN
+                v_id := TO_NUMBER(JSON_VALUE(:body_text, '$.id_alicuota'));
+
+                UPDATE alicuota
+                SET estado = 'ANULADA'
+                WHERE id_alicuota = v_id;
+
+                v_filas := SQL%ROWCOUNT;
+                COMMIT;
+
+                :status_code := 200;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Alícuota anulada","filas_afectadas":' || v_filas || '}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET pagos - /pagos/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'pagos/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'pagos/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT pg.*, a.id_vivienda, v.numero_vivienda, pr.nombres || ' ' || pr.apellidos AS propietario
+FROM pago pg
+JOIN alicuota a ON a.id_alicuota = pg.id_alicuota
+JOIN vivienda v ON v.id_vivienda = a.id_vivienda
+JOIN propietario pr ON pr.id_propietario = v.id_propietario
+ORDER BY pg.id_pago DESC
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET pago por ID - /pagos/:id/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'pagos/:id/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'pagos/:id/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query_one_row,
+        p_source      => q'[
+SELECT pg.*, a.id_vivienda, v.numero_vivienda, pr.nombres || ' ' || pr.apellidos AS propietario
+FROM pago pg
+JOIN alicuota a ON a.id_alicuota = pg.id_alicuota
+JOIN vivienda v ON v.id_vivienda = a.id_vivienda
+JOIN propietario pr ON pr.id_propietario = v.id_propietario
+WHERE pg.id_pago = TO_NUMBER(:id)
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- POST registrar pago - /pagos/registrar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'pagos/registrar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'pagos/registrar/',
+        p_method      => 'POST',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id_alicuota  NUMBER;
+                v_valor_pagado NUMBER;
+                v_metodo_pago  VARCHAR2(30);
+                v_referencia   VARCHAR2(80);
+            BEGIN
+                v_id_alicuota  := TO_NUMBER(JSON_VALUE(:body_text, '$.id_alicuota'));
+                v_valor_pagado := TO_NUMBER(JSON_VALUE(:body_text, '$.valor_pagado'));
+                v_metodo_pago  := JSON_VALUE(:body_text, '$.metodo_pago');
+                v_referencia   := JSON_VALUE(:body_text, '$.referencia');
+
+                pr_registrar_pago(v_id_alicuota, v_valor_pagado, v_metodo_pago, v_referencia);
+
+                COMMIT;
+
+                :status_code := 201;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Pago registrado correctamente"}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- PUT actualizar datos de pago - /pagos/actualizar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'pagos/actualizar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'pagos/actualizar/',
+        p_method      => 'PUT',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id     NUMBER;
+                v_metodo VARCHAR2(30);
+                v_ref    VARCHAR2(80);
+                v_filas  NUMBER;
+            BEGIN
+                v_id     := TO_NUMBER(JSON_VALUE(:body_text, '$.id_pago'));
+                v_metodo := JSON_VALUE(:body_text, '$.metodo_pago');
+                v_ref    := JSON_VALUE(:body_text, '$.referencia');
+
+                UPDATE pago
+                SET metodo_pago = NVL(v_metodo, metodo_pago),
+                    referencia = NVL(v_ref, referencia)
+                WHERE id_pago = v_id;
+
+                v_filas := SQL%ROWCOUNT;
+                COMMIT;
+
+                :status_code := 200;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Pago actualizado","filas_afectadas":' || v_filas || '}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- DELETE pago protegido - /pagos/eliminar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'pagos/eliminar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'pagos/eliminar/',
+        p_method      => 'DELETE',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            BEGIN
+                :status_code := 409;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"No se elimina físicamente un pago porque descuadra caja y auditoría. Se recomienda manejar reversos contables."}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET egresos - /egresos/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'egresos/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'egresos/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT * FROM egreso ORDER BY id_egreso DESC
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET egreso por ID - /egresos/:id/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'egresos/:id/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'egresos/:id/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query_one_row,
+        p_source      => q'[
+SELECT * FROM egreso WHERE id_egreso = TO_NUMBER(:id)
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- POST registrar egreso - /egresos/registrar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'egresos/registrar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'egresos/registrar/',
+        p_method      => 'POST',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_categoria   VARCHAR2(80);
+                v_descripcion VARCHAR2(300);
+                v_valor       NUMBER;
+                v_responsable VARCHAR2(100);
+            BEGIN
+                v_categoria   := JSON_VALUE(:body_text, '$.categoria');
+                v_descripcion := JSON_VALUE(:body_text, '$.descripcion');
+                v_valor       := TO_NUMBER(JSON_VALUE(:body_text, '$.valor'));
+                v_responsable := JSON_VALUE(:body_text, '$.responsable');
+
+                pr_registrar_egreso(v_categoria, v_descripcion, v_valor, v_responsable);
+
+                COMMIT;
+
+                :status_code := 201;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Egreso registrado correctamente"}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- PUT actualizar egreso - /egresos/actualizar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'egresos/actualizar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'egresos/actualizar/',
+        p_method      => 'PUT',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_id          NUMBER;
+                v_categoria   VARCHAR2(80);
+                v_descripcion VARCHAR2(300);
+                v_responsable VARCHAR2(100);
+                v_filas       NUMBER;
+            BEGIN
+                v_id          := TO_NUMBER(JSON_VALUE(:body_text, '$.id_egreso'));
+                v_categoria   := JSON_VALUE(:body_text, '$.categoria');
+                v_descripcion := JSON_VALUE(:body_text, '$.descripcion');
+                v_responsable := JSON_VALUE(:body_text, '$.responsable');
+
+                UPDATE egreso
+                SET categoria = NVL(v_categoria, categoria),
+                    descripcion = NVL(v_descripcion, descripcion),
+                    responsable = NVL(v_responsable, responsable)
+                WHERE id_egreso = v_id;
+
+                v_filas := SQL%ROWCOUNT;
+                COMMIT;
+
+                :status_code := 200;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Egreso actualizado","filas_afectadas":' || v_filas || '}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- DELETE egreso protegido - /egresos/eliminar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'egresos/eliminar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'egresos/eliminar/',
+        p_method      => 'DELETE',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            BEGIN
+                :status_code := 409;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"No se elimina físicamente un egreso porque forma parte de caja y auditoría. Se recomienda manejar reversos contables."}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET caja movimientos - /caja-movimientos/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'caja-movimientos/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'caja-movimientos/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT * FROM caja_movimiento ORDER BY id_movimiento DESC
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET saldo caja - /saldo-caja/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'saldo-caja/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'saldo-caja/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query_one_row,
+        p_source      => q'[
+SELECT * FROM vw_saldo_caja
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET auditoria - /auditoria/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'auditoria/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'auditoria/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT * FROM auditoria_sistema ORDER BY id_auditoria DESC
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET consultas IA - /consultas-ia/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'consultas-ia/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'consultas-ia/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT id_consulta, pregunta_usuario, DBMS_LOB.SUBSTR(sql_generado, 4000, 1) AS sql_generado, estado, fecha_consulta
+FROM consulta_ia
+ORDER BY id_consulta DESC
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- POST procesar consulta IA - /consultas-ia/procesar/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'consultas-ia/procesar/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'consultas-ia/procesar/',
+        p_method      => 'POST',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            DECLARE
+                v_pregunta VARCHAR2(1000);
+            BEGIN
+                v_pregunta := JSON_VALUE(:body_text, '$.pregunta');
+
+                pr_consulta_lenguaje_natural(v_pregunta);
+
+                COMMIT;
+
+                :status_code := 201;
+                owa_util.mime_header('application/json', TRUE);
+                htp.p('{"mensaje":"Pregunta procesada y guardada en CONSULTA_IA"}');
+
+            EXCEPTION
+                WHEN OTHERS THEN
+                    ROLLBACK;
+                    :status_code := 400;
+                    owa_util.mime_header('application/json', TRUE);
+                    htp.p('{"error":"' || REPLACE(SQLERRM, '"', '\"') || '"}');
+            END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET deudores - /deudores/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'deudores/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'deudores/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT * FROM vw_deudores ORDER BY apellidos, nombres
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET deudores filtro - /deudores/filtro/:letra/:mes1/:mes2/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'deudores/filtro/:letra/:mes1/:mes2/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'deudores/filtro/:letra/:mes1/:mes2/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT DISTINCT
+    p.id_propietario, p.cedula, p.nombres, p.apellidos, p.telefono, p.correo,
+    v.numero_vivienda, v.manzana, pe.mes, pe.anio, a.valor, a.estado, a.fecha_limite
+FROM propietario p
+JOIN vivienda v ON v.id_propietario = p.id_propietario
+JOIN alicuota a ON a.id_vivienda = v.id_vivienda
+JOIN periodo pe ON pe.id_periodo = a.id_periodo
+WHERE UPPER(p.apellidos) LIKE UPPER(:letra) || '%'
+  AND pe.mes IN (TO_NUMBER(:mes1), TO_NUMBER(:mes2))
+  AND a.estado IN ('PENDIENTE', 'VENCIDA')
+ORDER BY p.apellidos, p.nombres, pe.mes
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET deuda propietarios - /deuda-propietarios/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'deuda-propietarios/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'deuda-propietarios/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT * FROM vw_deuda_propietario ORDER BY deuda_total DESC
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET recaudacion mensual - /recaudacion-mensual/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'recaudacion-mensual/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'recaudacion-mensual/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT * FROM vw_recaudacion_mensual ORDER BY anio, mes
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET top deudores - /top-deudores/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'top-deudores/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'top-deudores/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT * FROM vw_top_deudores
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+--------------------------------------------------------------------------------
+-- GET reporte financiero JSON - /reporte-financiero-json/
+--------------------------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'reporte-financiero-json/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'reporte-financiero-json/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+SELECT * FROM vw_json_reporte_financiero
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+PROMPT ============================================================
+PROMPT VERIFICACIÓN FINAL DE TEMPLATES
+PROMPT ============================================================
+
+SELECT uri_template
+FROM user_ords_templates
+ORDER BY uri_template;
+
+PROMPT ============================================================
+PROMPT VERIFICACIÓN FINAL DE HANDLERS
+PROMPT ============================================================
+
+SELECT method, source_type
+FROM user_ords_handlers
+ORDER BY method, source_type;
+
+PROMPT ============================================================
+PROMPT FIN DEL SCRIPT CRUD COMPLETO ORDS
+PROMPT ============================================================

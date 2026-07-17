@@ -1,0 +1,402 @@
+------------------------------------------------------------
+-- Proyecto: Sistema Inteligente de Gestión de Alícuotas
+-- API REST completa: GET, POST, PUT, DELETE + Reportes
+------------------------------------------------------------
+
+SET SERVEROUTPUT ON;
+
+BEGIN
+    --------------------------------------------------------
+    -- MÓDULO PRINCIPAL DE LA API
+    --------------------------------------------------------
+    ORDS.DEFINE_MODULE(
+        p_module_name    => 'mod_alicuotas_api',
+        p_base_path      => 'api/',
+        p_items_per_page => 25,
+        p_status         => 'PUBLISHED'
+    );
+
+    --------------------------------------------------------
+    -- GET: LISTADO GENERAL DE DEUDORES
+    -- /ords/alicuotas/api/deudores/
+    --------------------------------------------------------
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'deudores/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'deudores/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+            SELECT 
+                apellidos,
+                nombres,
+                telefono,
+                correo,
+                numero_vivienda,
+                manzana,
+                mes,
+                anio,
+                valor,
+                estado,
+                fecha_limite
+            FROM vw_deudores
+            ORDER BY apellidos, nombres, anio, mes
+        ]'
+    );
+
+    --------------------------------------------------------
+    -- GET: DEUDORES FILTRADOS POR LETRA Y MESES
+    -- /ords/alicuotas/api/deudores/filtro/A/9/12/
+    --------------------------------------------------------
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'deudores/filtro/:letra/:mes1/:mes2/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'deudores/filtro/:letra/:mes1/:mes2/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+            SELECT 
+                apellidos,
+                nombres,
+                telefono,
+                correo,
+                numero_vivienda,
+                manzana,
+                mes,
+                anio,
+                valor,
+                estado
+            FROM vw_deudores
+            WHERE UPPER(apellidos) LIKE UPPER(:letra) || '%'
+              AND mes IN (TO_NUMBER(:mes1), TO_NUMBER(:mes2))
+            ORDER BY apellidos, nombres, mes
+        ]'
+    );
+
+    --------------------------------------------------------
+    -- GET: DEUDA TOTAL POR PROPIETARIO
+    -- /ords/alicuotas/api/deuda-propietarios/
+    --------------------------------------------------------
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'deuda-propietarios/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'deuda-propietarios/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+            SELECT *
+            FROM vw_deuda_propietario
+            ORDER BY deuda_total DESC
+        ]'
+    );
+
+    --------------------------------------------------------
+    -- GET: RECAUDACIÓN MENSUAL
+    -- /ords/alicuotas/api/recaudacion-mensual/
+    --------------------------------------------------------
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'recaudacion-mensual/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'recaudacion-mensual/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+            SELECT *
+            FROM vw_recaudacion_mensual
+            ORDER BY anio, mes
+        ]'
+    );
+
+    --------------------------------------------------------
+    -- GET: SALDO DE CAJA
+    -- /ords/alicuotas/api/saldo-caja/
+    --------------------------------------------------------
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'saldo-caja/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'saldo-caja/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+            SELECT *
+            FROM vw_saldo_caja
+        ]'
+    );
+
+    --------------------------------------------------------
+    -- GET: TOP DEUDORES
+    -- /ords/alicuotas/api/top-deudores/
+    --------------------------------------------------------
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'top-deudores/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'top-deudores/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+            SELECT *
+            FROM vw_top_deudores
+        ]'
+    );
+
+    --------------------------------------------------------
+    -- GET: REPORTE FINANCIERO JSON
+    -- /ords/alicuotas/api/reporte-financiero-json/
+    --------------------------------------------------------
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'reporte-financiero-json/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'reporte-financiero-json/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+            SELECT documento_json
+            FROM vw_json_reporte_financiero
+        ]'
+    );
+
+    --------------------------------------------------------
+    -- CRUD PROPIETARIOS
+    --------------------------------------------------------
+
+    --------------------------------------------------------
+    -- GET: LISTAR PROPIETARIOS
+    -- /ords/alicuotas/api/propietarios/
+    --------------------------------------------------------
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+            SELECT 
+                id_propietario,
+                cedula,
+                nombres,
+                apellidos,
+                telefono,
+                correo,
+                estado,
+                fecha_registro
+            FROM propietario
+            ORDER BY apellidos, nombres
+        ]'
+    );
+
+    --------------------------------------------------------
+    -- POST: CREAR PROPIETARIO
+    -- Ejemplo:
+    -- /ords/alicuotas/api/propietarios/?cedula=0109999999&nombres=Juan&apellidos=Arias&telefono=0999999999&correo=juan@gmail.com
+    --------------------------------------------------------
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/',
+        p_method      => 'POST',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            BEGIN
+                INSERT INTO propietario (
+                    cedula,
+                    nombres,
+                    apellidos,
+                    telefono,
+                    correo,
+                    estado
+                ) VALUES (
+                    :cedula,
+                    :nombres,
+                    :apellidos,
+                    :telefono,
+                    :correo,
+                    'ACTIVO'
+                );
+
+                COMMIT;
+            END;
+        ]'
+    );
+
+    --------------------------------------------------------
+    -- GET: BUSCAR PROPIETARIO POR ID
+    -- /ords/alicuotas/api/propietarios/1/
+    --------------------------------------------------------
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/:id/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/:id/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query_one_row,
+        p_source      => q'[
+            SELECT 
+                id_propietario,
+                cedula,
+                nombres,
+                apellidos,
+                telefono,
+                correo,
+                estado,
+                fecha_registro
+            FROM propietario
+            WHERE id_propietario = TO_NUMBER(:id)
+        ]'
+    );
+
+    --------------------------------------------------------
+    -- PUT: ACTUALIZAR PROPIETARIO
+    -- Ejemplo:
+    -- /ords/alicuotas/api/propietarios/1/?telefono=0988888888&correo=nuevo@gmail.com&estado=ACTIVO
+    --------------------------------------------------------
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/:id/',
+        p_method      => 'PUT',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            BEGIN
+                UPDATE propietario
+                SET 
+                    telefono = NVL(:telefono, telefono),
+                    correo   = NVL(:correo, correo),
+                    estado   = NVL(:estado, estado)
+                WHERE id_propietario = TO_NUMBER(:id);
+
+                COMMIT;
+            END;
+        ]'
+    );
+
+    --------------------------------------------------------
+    -- DELETE: INACTIVAR PROPIETARIO
+    -- No se elimina físicamente porque puede tener viviendas,
+    -- alícuotas y pagos relacionados.
+    -- /ords/alicuotas/api/propietarios/1/
+    --------------------------------------------------------
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'propietarios/:id/',
+        p_method      => 'DELETE',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            BEGIN
+                UPDATE propietario
+                SET estado = 'INACTIVO'
+                WHERE id_propietario = TO_NUMBER(:id);
+
+                COMMIT;
+            END;
+        ]'
+    );
+
+    --------------------------------------------------------
+    -- POST: REGISTRAR PAGO
+    -- Usa el procedimiento PL/SQL pr_registrar_pago
+    -- Ejemplo:
+    -- /ords/alicuotas/api/pagos/?id_alicuota=10&valor_pagado=45&metodo_pago=EFECTIVO&referencia=REC-001
+    --------------------------------------------------------
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'pagos/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'pagos/',
+        p_method      => 'POST',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+            BEGIN
+                pr_registrar_pago(
+                    p_id_alicuota  => TO_NUMBER(:id_alicuota),
+                    p_valor_pagado => TO_NUMBER(:valor_pagado),
+                    p_metodo_pago  => :metodo_pago,
+                    p_referencia   => :referencia
+                );
+            END;
+        ]'
+    );
+
+    COMMIT;
+
+    DBMS_OUTPUT.PUT_LINE('API REST completa creada correctamente.');
+    DBMS_OUTPUT.PUT_LINE('Incluye GET, POST, PUT y DELETE.');
+END;
+/
+
+
+
+SELECT name, uri_prefix, status
+FROM user_ords_modules;
+
+
+
+SELECT 
+    t.uri_template,
+    h.method
+FROM user_ords_templates t
+JOIN user_ords_handlers h
+ON t.template_id = h.template_id
+ORDER BY t.uri_template, h.method;
+
+
+
+
+SELECT uri_template
+FROM user_ords_templates
+ORDER BY uri_template;
+
+
+
+SELECT method
+FROM user_ords_handlers
+ORDER BY method;
+
+
+SELECT table_name, column_name
+FROM user_tab_columns
+WHERE table_name IN ('USER_ORDS_TEMPLATES', 'USER_ORDS_HANDLERS')
+ORDER BY table_name, column_id;
+
+
+SELECT *
+FROM user_ords_templates;
+
+
+SELECT *
+FROM user_ords_handlers;

@@ -1,0 +1,51 @@
+------------------------------------------------------------
+-- 04_INDICES_OPTIMIZACION.sql
+-- Índices para mejorar consultas frecuentes
+------------------------------------------------------------
+
+CREATE INDEX idx_propietario_apellidos 
+ON propietario(apellidos);
+
+CREATE INDEX idx_alicuota_estado 
+ON alicuota(estado);
+
+CREATE INDEX idx_alicuota_periodo 
+ON alicuota(id_periodo);
+
+CREATE INDEX idx_alicuota_vivienda 
+ON alicuota(id_vivienda);
+
+CREATE INDEX idx_pago_alicuota 
+ON pago(id_alicuota);
+
+CREATE INDEX idx_pago_fecha 
+ON pago(fecha_pago);
+
+CREATE INDEX idx_caja_tipo_fecha 
+ON caja_movimiento(tipo_movimiento, fecha_movimiento);
+
+CREATE INDEX idx_vivienda_manzana 
+ON vivienda(manzana);
+
+
+
+
+EXPLAIN PLAN FOR
+SELECT 
+    p.apellidos,
+    p.nombres,
+    v.numero_vivienda,
+    pe.mes,
+    pe.anio,
+    a.valor,
+    a.estado
+FROM propietario p
+JOIN vivienda v ON p.id_propietario = v.id_propietario
+JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+JOIN periodo pe ON a.id_periodo = pe.id_periodo
+WHERE a.estado IN ('PENDIENTE', 'VENCIDA')
+  AND pe.mes IN (9, 12)
+  AND UPPER(p.apellidos) LIKE 'A%'
+ORDER BY p.apellidos, pe.mes;
+
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);

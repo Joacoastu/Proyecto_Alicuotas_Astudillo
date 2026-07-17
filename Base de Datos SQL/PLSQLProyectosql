@@ -1,0 +1,310 @@
+------------------------------------------------------------
+-- 04_PL_SQL.sql
+-- Proyecto: Sistema Inteligente de Gestión de Alícuotas
+-- Estudiante: Joaquín Astudillo
+------------------------------------------------------------
+
+SET SERVEROUTPUT ON;
+
+------------------------------------------------------------
+-- FUNCIÓN 1: CALCULAR DEUDA DE UNA VIVIENDA
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_deuda_vivienda (
+    p_id_vivienda IN NUMBER
+) RETURN NUMBER
+IS
+    v_deuda NUMBER(10,2);
+BEGIN
+    SELECT NVL(SUM(
+        a.valor - NVL((
+            SELECT SUM(pa.valor_pagado)
+            FROM pago pa
+            WHERE pa.id_alicuota = a.id_alicuota
+        ), 0)
+    ), 0)
+    INTO v_deuda
+    FROM alicuota a
+    WHERE a.id_vivienda = p_id_vivienda
+      AND a.estado IN ('PENDIENTE', 'VENCIDA');
+
+    RETURN v_deuda;
+END;
+/
+------------------------------------------------------------
+-- FUNCIÓN 2: CALCULAR DEUDA DE UN PROPIETARIO
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_deuda_propietario (
+    p_id_propietario IN NUMBER
+) RETURN NUMBER
+IS
+    v_deuda NUMBER(10,2);
+BEGIN
+    SELECT NVL(SUM(
+        a.valor - NVL((
+            SELECT SUM(pa.valor_pagado)
+            FROM pago pa
+            WHERE pa.id_alicuota = a.id_alicuota
+        ), 0)
+    ), 0)
+    INTO v_deuda
+    FROM propietario p
+    JOIN vivienda v ON p.id_propietario = v.id_propietario
+    JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+    WHERE p.id_propietario = p_id_propietario
+      AND a.estado IN ('PENDIENTE', 'VENCIDA');
+
+    RETURN v_deuda;
+END;
+/
+
+
+
+------------------------------------------------------------
+-- PROCEDIMIENTO 1: REGISTRAR PAGO DE ALÍCUOTA
+-- Inserta el pago, actualiza el estado de la alícuota
+-- y registra el ingreso en caja.
+------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE pr_registrar_pago (
+    p_id_alicuota  IN NUMBER,
+    p_valor_pagado IN NUMBER,
+    p_metodo_pago  IN VARCHAR2,
+    p_referencia   IN VARCHAR2 DEFAULT NULL
+)
+IS
+    v_valor_alicuota NUMBER(10,2);
+    v_total_pagado   NUMBER(10,2);
+    v_saldo          NUMBER(10,2);
+    v_id_pago        NUMBER;
+BEGIN
+    SELECT valor
+    INTO v_valor_alicuota
+    FROM alicuota
+    WHERE id_alicuota = p_id_alicuota
+      AND estado <> 'ANULADA';
+
+    SELECT NVL(SUM(valor_pagado), 0)
+    INTO v_total_pagado
+    FROM pago
+    WHERE id_alicuota = p_id_alicuota;
+
+    v_saldo := v_valor_alicuota - v_total_pagado;
+
+    IF p_valor_pagado <= 0 THEN
+        RAISE_APPLICATION_ERROR(-20001, 'El valor pagado debe ser mayor a cero.');
+    END IF;
+
+    IF p_valor_pagado > v_saldo THEN
+        RAISE_APPLICATION_ERROR(-20002, 'El valor pagado supera el saldo pendiente.');
+    END IF;
+
+    INSERT INTO pago (
+        id_alicuota,
+        fecha_pago,
+        valor_pagado,
+        metodo_pago,
+        referencia,
+        observacion
+    ) VALUES (
+        p_id_alicuota,
+        SYSDATE,
+        p_valor_pagado,
+        UPPER(p_metodo_pago),
+        p_referencia,
+        'Pago registrado mediante procedimiento PL/SQL'
+    )
+    RETURNING id_pago INTO v_id_pago;
+
+    INSERT INTO caja_movimiento (
+        fecha_movimiento,
+        tipo_movimiento,
+        concepto,
+        valor,
+        id_pago
+    ) VALUES (
+        SYSDATE,
+        'INGRESO',
+        'Ingreso por pago de alícuota',
+        p_valor_pagado,
+        v_id_pago
+    );
+
+    IF (v_total_pagado + p_valor_pagado) >= v_valor_alicuota THEN
+        UPDATE alicuota
+        SET estado = 'PAGADA'
+        WHERE id_alicuota = p_id_alicuota;
+    END IF;
+
+    COMMIT;
+
+    DBMS_OUTPUT.PUT_LINE('Pago registrado correctamente.');
+    DBMS_OUTPUT.PUT_LINE('ID del pago: ' || v_id_pago);
+END;
+/
+
+
+------------------------------------------------------------
+-- PROCEDIMIENTO 2: GENERAR ALÍCUOTAS MENSUALES
+-- Crea el período si no existe y genera alícuotas para
+-- todas las viviendas que no estén en construcción.
+------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE pr_generar_alicuotas_mensuales (
+    p_mes   IN NUMBER,
+    p_anio  IN NUMBER,
+    p_valor IN NUMBER DEFAULT 45
+)
+IS
+    v_id_periodo periodo.id_periodo%TYPE;
+    v_fecha_limite DATE;
+BEGIN
+    IF p_mes NOT BETWEEN 1 AND 12 THEN
+        RAISE_APPLICATION_ERROR(-20003, 'El mes debe estar entre 1 y 12.');
+    END IF;
+
+    IF p_valor <= 0 THEN
+        RAISE_APPLICATION_ERROR(-20004, 'El valor de la alícuota debe ser mayor a cero.');
+    END IF;
+
+    BEGIN
+        SELECT id_periodo
+        INTO v_id_periodo
+        FROM periodo
+        WHERE mes = p_mes
+          AND anio = p_anio;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            INSERT INTO periodo (mes, anio, estado)
+            VALUES (p_mes, p_anio, 'ABIERTO')
+            RETURNING id_periodo INTO v_id_periodo;
+    END;
+
+    v_fecha_limite := TO_DATE(p_anio || '-' || LPAD(p_mes, 2, '0') || '-10', 'YYYY-MM-DD');
+
+    INSERT INTO alicuota (
+        id_vivienda,
+        id_periodo,
+        valor,
+        fecha_emision,
+        fecha_limite,
+        estado,
+        observacion
+    )
+    SELECT 
+        v.id_vivienda,
+        v_id_periodo,
+        p_valor,
+        SYSDATE,
+        v_fecha_limite,
+        'PENDIENTE',
+        'Alícuota generada mediante procedimiento PL/SQL'
+    FROM vivienda v
+    WHERE v.estado <> 'EN_CONSTRUCCION'
+      AND NOT EXISTS (
+          SELECT 1
+          FROM alicuota a
+          WHERE a.id_vivienda = v.id_vivienda
+            AND a.id_periodo = v_id_periodo
+      );
+
+    COMMIT;
+
+    DBMS_OUTPUT.PUT_LINE('Alícuotas generadas correctamente para el período ' || p_mes || '/' || p_anio);
+END;
+/
+
+
+
+------------------------------------------------------------
+-- PROCEDIMIENTO 3: ACTUALIZAR ALÍCUOTAS VENCIDAS
+-- Cambia de PENDIENTE a VENCIDA cuando pasa la fecha límite.
+------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE pr_actualizar_vencidas (
+    p_fecha_referencia IN DATE DEFAULT SYSDATE
+)
+IS
+    v_total_actualizadas NUMBER;
+BEGIN
+    UPDATE alicuota
+    SET estado = 'VENCIDA'
+    WHERE estado = 'PENDIENTE'
+      AND fecha_limite < p_fecha_referencia;
+
+    v_total_actualizadas := SQL%ROWCOUNT;
+
+    COMMIT;
+
+    DBMS_OUTPUT.PUT_LINE('Alícuotas actualizadas a VENCIDA: ' || v_total_actualizadas);
+END;
+/
+
+
+
+
+
+
+------------------------------------------------------------
+-- PROCEDIMIENTO 4: REGISTRAR EGRESO
+-- Registra un gasto y descuenta de caja.
+------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE pr_registrar_egreso (
+    p_categoria   IN VARCHAR2,
+    p_descripcion IN VARCHAR2,
+    p_valor       IN NUMBER,
+    p_responsable IN VARCHAR2 DEFAULT 'Administrador'
+)
+IS
+    v_id_egreso NUMBER;
+BEGIN
+    IF p_valor <= 0 THEN
+        RAISE_APPLICATION_ERROR(-20005, 'El valor del egreso debe ser mayor a cero.');
+    END IF;
+
+    INSERT INTO egreso (
+        fecha_egreso,
+        categoria,
+        descripcion,
+        valor,
+        responsable
+    ) VALUES (
+        SYSDATE,
+        p_categoria,
+        p_descripcion,
+        p_valor,
+        p_responsable
+    )
+    RETURNING id_egreso INTO v_id_egreso;
+
+    INSERT INTO caja_movimiento (
+        fecha_movimiento,
+        tipo_movimiento,
+        concepto,
+        valor,
+        id_egreso
+    ) VALUES (
+        SYSDATE,
+        'EGRESO',
+        'Egreso registrado desde PL/SQL',
+        p_valor,
+        v_id_egreso
+    );
+
+    COMMIT;
+
+    DBMS_OUTPUT.PUT_LINE('Egreso registrado correctamente.');
+    DBMS_OUTPUT.PUT_LINE('ID del egreso: ' || v_id_egreso);
+END;
+/
+
+
+-- Verificar
+
+SELECT object_name, object_type, status
+FROM user_objects
+WHERE object_name IN (
+    'FN_DEUDA_VIVIENDA',
+    'FN_DEUDA_PROPIETARIO',
+    'PR_REGISTRAR_PAGO',
+    'PR_GENERAR_ALICUOTAS_MENSUALES',
+    'PR_ACTUALIZAR_VENCIDAS',
+    'PR_REGISTRAR_EGRESO'
+)
+ORDER BY object_type, object_name;

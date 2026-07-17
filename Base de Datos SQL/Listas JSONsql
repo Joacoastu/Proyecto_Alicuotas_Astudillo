@@ -1,0 +1,149 @@
+------------------------------------------------------------
+-- 07_VISTAS_JSON.sql
+-- Proyecto: Sistema Inteligente de Gestión de Alícuotas
+-- Estudiante: Joaquín Astudillo
+------------------------------------------------------------
+
+------------------------------------------------------------
+-- VISTA JSON 1:
+-- Propietario con sus viviendas y deuda total.
+------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_json_propietario_viviendas AS
+SELECT 
+    p.id_propietario,
+    JSON_OBJECT(
+        'id_propietario' VALUE p.id_propietario,
+        'cedula' VALUE p.cedula,
+        'propietario' VALUE p.apellidos || ' ' || p.nombres,
+        'telefono' VALUE p.telefono,
+        'correo' VALUE p.correo,
+        'estado' VALUE p.estado,
+        'deuda_total' VALUE fn_deuda_propietario(p.id_propietario),
+        'viviendas' VALUE (
+            SELECT JSON_ARRAYAGG(
+                JSON_OBJECT(
+                    'id_vivienda' VALUE v.id_vivienda,
+                    'numero_vivienda' VALUE v.numero_vivienda,
+                    'manzana' VALUE v.manzana,
+                    'tipo_vivienda' VALUE v.tipo_vivienda,
+                    'estado' VALUE v.estado,
+                    'deuda_vivienda' VALUE fn_deuda_vivienda(v.id_vivienda)
+                )
+                RETURNING CLOB
+            )
+            FROM vivienda v
+            WHERE v.id_propietario = p.id_propietario
+        ) FORMAT JSON
+        RETURNING CLOB
+    ) AS documento_json
+FROM propietario p;
+
+------------------------------------------------------------
+-- VISTA JSON 2:
+-- Vivienda con sus alícuotas mensuales.
+------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_json_vivienda_alicuotas AS
+SELECT 
+    v.id_vivienda,
+    JSON_OBJECT(
+        'id_vivienda' VALUE v.id_vivienda,
+        'numero_vivienda' VALUE v.numero_vivienda,
+        'manzana' VALUE v.manzana,
+        'tipo_vivienda' VALUE v.tipo_vivienda,
+        'estado_vivienda' VALUE v.estado,
+        'propietario' VALUE p.apellidos || ' ' || p.nombres,
+        'alicuotas' VALUE (
+            SELECT JSON_ARRAYAGG(
+                JSON_OBJECT(
+                    'id_alicuota' VALUE a.id_alicuota,
+                    'mes' VALUE pe.mes,
+                    'anio' VALUE pe.anio,
+                    'valor' VALUE a.valor,
+                    'fecha_limite' VALUE TO_CHAR(a.fecha_limite, 'YYYY-MM-DD'),
+                    'estado' VALUE a.estado
+                )
+                ORDER BY pe.anio, pe.mes
+                RETURNING CLOB
+            )
+            FROM alicuota a
+            JOIN periodo pe ON a.id_periodo = pe.id_periodo
+            WHERE a.id_vivienda = v.id_vivienda
+        ) FORMAT JSON
+        RETURNING CLOB
+    ) AS documento_json
+FROM vivienda v
+JOIN propietario p ON v.id_propietario = p.id_propietario;
+
+------------------------------------------------------------
+-- VISTA JSON 3:
+-- Reporte financiero general.
+------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_json_reporte_financiero AS
+SELECT 
+    JSON_OBJECT(
+        'reporte' VALUE 'Resumen financiero de alícuotas',
+        'total_propietarios' VALUE (SELECT COUNT(*) FROM propietario),
+        'total_viviendas' VALUE (SELECT COUNT(*) FROM vivienda),
+        'total_alicuotas' VALUE (SELECT COUNT(*) FROM alicuota),
+        'total_pagos' VALUE (SELECT COUNT(*) FROM pago),
+        'total_egresos' VALUE (SELECT COUNT(*) FROM egreso),
+        'saldo_caja' VALUE (
+            SELECT saldo_actual
+            FROM vw_saldo_caja
+        ),
+        'recaudacion_mensual' VALUE (
+            SELECT JSON_ARRAYAGG(
+                JSON_OBJECT(
+                    'anio' VALUE anio,
+                    'mes' VALUE mes,
+                    'cantidad_pagos' VALUE cantidad_pagos,
+                    'total_recaudado' VALUE total_recaudado
+                )
+                ORDER BY anio, mes
+                RETURNING CLOB
+            )
+            FROM vw_recaudacion_mensual
+        ) FORMAT JSON,
+        'top_deudores' VALUE (
+            SELECT JSON_ARRAYAGG(
+                JSON_OBJECT(
+                    'propietario' VALUE propietario,
+                    'numero_vivienda' VALUE numero_vivienda,
+                    'manzana' VALUE manzana,
+                    'cuotas_pendientes' VALUE cuotas_pendientes,
+                    'deuda_total' VALUE deuda_total
+                )
+                RETURNING CLOB
+            )
+            FROM vw_top_deudores
+        ) FORMAT JSON
+        RETURNING CLOB
+    ) AS documento_json
+FROM dual;
+
+------------------------------------------------------------
+-- VISTA JSON 4:
+-- Deudores en formato JSON para consulta directa.
+------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_json_deudores AS
+SELECT 
+    d.id_propietario,
+    d.id_vivienda,
+    d.id_alicuota,
+    JSON_OBJECT(
+        'id_propietario' VALUE d.id_propietario,
+        'propietario' VALUE d.apellidos || ' ' || d.nombres,
+        'telefono' VALUE d.telefono,
+        'correo' VALUE d.correo,
+        'vivienda' VALUE d.numero_vivienda,
+        'manzana' VALUE d.manzana,
+        'periodo' VALUE JSON_OBJECT(
+            'mes' VALUE d.mes,
+            'anio' VALUE d.anio
+        ),
+        'valor_deuda' VALUE d.valor,
+        'estado' VALUE d.estado,
+        'fecha_limite' VALUE TO_CHAR(d.fecha_limite, 'YYYY-MM-DD')
+        RETURNING CLOB
+    ) AS documento_json
+FROM vw_deudores d;

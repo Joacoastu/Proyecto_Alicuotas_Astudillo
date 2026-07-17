@@ -1,0 +1,920 @@
+PLANTILLAS POSTMAN - API REST SISTEMA DE ALICUOTAS
+Proyecto: Sistema Inteligente de Gestion de Alicuotas
+Autor: Joaquin Astudillo
+Esquema: PROY_ALICUOTAS_ASTUDILLO
+
+============================================================
+CONFIGURACION GENERAL EN POSTMAN
+============================================================
+
+URL BASE:
+http://localhost:8080/ords/alicuotas/api
+
+Para POST, PUT y DELETE con JSON usar:
+
+Headers:
+Content-Type: application/json
+
+Body:
+raw -> JSON
+
+Nota:
+Los endpoints GET normalmente no llevan Body. Solo se pega la URL y se presiona Send.
+
+============================================================
+ORDEN LOGICO PARA PROBAR EL SISTEMA
+============================================================
+
+1. Verificar API activa
+2. Crear urbanizacion
+3. Crear propietario
+4. Crear vivienda para ese propietario
+5. Crear periodo
+6. Crear alicuota individual o generar alicuotas mensuales
+7. Registrar pago
+8. Registrar egreso
+9. Consultar caja, deudores, auditoria y reportes
+
+============================================================
+CONCEPTO DEL SISTEMA
+============================================================
+
+URBANIZACION:
+Es el conjunto residencial completo.
+Ejemplo: Urbanizacion La Florida.
+
+VIVIENDA:
+Es la casa, departamento o local dentro de la urbanizacion.
+Ejemplo: Casa A-01.
+
+PROPIETARIO:
+Es la persona duena o responsable de la vivienda.
+Ejemplo: Juan Arias.
+
+ALICUOTA:
+Es el valor mensual que paga cada vivienda.
+Ejemplo: $45 del mes de septiembre.
+
+PAGO:
+Es el dinero que entra a caja cuando un propietario paga su alicuota.
+
+EGRESO:
+Es el dinero que sale de caja por gastos comunes.
+Ejemplo: mantenimiento de puerta, guardia, limpieza, jardineria.
+
+CAJA:
+Guarda movimientos de ingreso y egreso.
+
+============================================================
+1. API INFO
+============================================================
+
+MOSTRAR INFORMACION DE LA API
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/info/
+
+Body:
+No lleva.
+
+============================================================
+2. URBANIZACION
+============================================================
+
+LISTAR URBANIZACIONES
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/urbanizacion/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+MOSTRAR URBANIZACION POR ID
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/urbanizacion/1/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+CREAR URBANIZACION
+
+Metodo:
+POST
+
+URL:
+http://localhost:8080/ords/alicuotas/api/urbanizacion/crear/
+
+Body -> raw -> JSON:
+{
+  "nombre": "Urbanizacion La Florida",
+  "direccion": "Av. Principal y Calle 10",
+  "ciudad": "Cuenca",
+  "telefono": "0999999999",
+  "correo": "admin@laflorida.com"
+}
+
+------------------------------------------------------------
+
+ACTUALIZAR URBANIZACION
+
+Metodo:
+PUT
+
+URL:
+http://localhost:8080/ords/alicuotas/api/urbanizacion/actualizar/
+
+Body -> raw -> JSON:
+{
+  "id_urbanizacion": 1,
+  "nombre": "Urbanizacion La Florida",
+  "direccion": "Av. Principal y Calle 12",
+  "ciudad": "Cuenca",
+  "telefono": "0988888888",
+  "correo": "administracion@laflorida.com"
+}
+
+------------------------------------------------------------
+
+ELIMINAR URBANIZACION
+
+Metodo:
+DELETE
+
+URL:
+http://localhost:8080/ords/alicuotas/api/urbanizacion/eliminar/
+
+Body -> raw -> JSON:
+{
+  "id_urbanizacion": 1
+}
+
+Nota:
+No es recomendable eliminar urbanizacion si ya tiene viviendas relacionadas.
+Para exposicion se puede decir que se evita eliminar tablas padre por integridad referencial.
+
+============================================================
+3. PROPIETARIOS
+============================================================
+
+LISTAR PROPIETARIOS
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/propietarios/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+MOSTRAR PROPIETARIO POR ID
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/propietarios/1/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+CREAR PROPIETARIO
+
+Metodo:
+POST
+
+URL:
+http://localhost:8080/ords/alicuotas/api/propietarios/crear/
+
+Body -> raw -> JSON:
+{
+  "cedula": "0109999999",
+  "nombres": "Juan",
+  "apellidos": "Arias",
+  "telefono": "0999999999",
+  "correo": "juan.arias@gmail.com"
+}
+
+------------------------------------------------------------
+
+ACTUALIZAR PROPIETARIO
+
+Metodo:
+PUT
+
+URL:
+http://localhost:8080/ords/alicuotas/api/propietarios/actualizar/
+
+Body -> raw -> JSON:
+{
+  "id_propietario": 51,
+  "cedula": "0109999999",
+  "nombres": "Juan Carlos",
+  "apellidos": "Arias",
+  "telefono": "0988888888",
+  "correo": "juan.actualizado@gmail.com",
+  "estado": "ACTIVO"
+}
+
+------------------------------------------------------------
+
+INACTIVAR PROPIETARIO
+
+Metodo:
+DELETE
+
+URL:
+http://localhost:8080/ords/alicuotas/api/propietarios/eliminar/
+
+Body -> raw -> JSON:
+{
+  "id_propietario": 51
+}
+
+Nota:
+Este endpoint no borra fisicamente. Cambia el estado del propietario a INACTIVO.
+
+============================================================
+4. VIVIENDAS
+============================================================
+
+LISTAR VIVIENDAS
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/viviendas/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+MOSTRAR VIVIENDA POR ID
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/viviendas/1/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+CREAR VIVIENDA
+
+Metodo:
+POST
+
+URL:
+http://localhost:8080/ords/alicuotas/api/viviendas/crear/
+
+Body -> raw -> JSON:
+{
+  "id_urbanizacion": 1,
+  "id_propietario": 51,
+  "numero_vivienda": "A-21",
+  "manzana": "A",
+  "tipo_vivienda": "CASA",
+  "estado": "HABITADA"
+}
+
+Valores sugeridos:
+tipo_vivienda: CASA, DEPARTAMENTO, LOCAL
+estado: HABITADA, DESOCUPADA, EN_CONSTRUCCION
+
+------------------------------------------------------------
+
+ACTUALIZAR VIVIENDA
+
+Metodo:
+PUT
+
+URL:
+http://localhost:8080/ords/alicuotas/api/viviendas/actualizar/
+
+Body -> raw -> JSON:
+{
+  "id_vivienda": 51,
+  "numero_vivienda": "A-21",
+  "manzana": "A",
+  "tipo_vivienda": "CASA",
+  "estado": "HABITADA"
+}
+
+------------------------------------------------------------
+
+ELIMINAR / DESACTIVAR VIVIENDA
+
+Metodo:
+DELETE
+
+URL:
+http://localhost:8080/ords/alicuotas/api/viviendas/eliminar/
+
+Body -> raw -> JSON:
+{
+  "id_vivienda": 51
+}
+
+Nota:
+Este endpoint maneja eliminacion logica. No se recomienda borrar fisicamente una vivienda con historial de alicuotas.
+
+============================================================
+5. PERIODOS
+============================================================
+
+LISTAR PERIODOS
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/periodos/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+MOSTRAR PERIODO POR ID
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/periodos/1/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+CREAR PERIODO
+
+Metodo:
+POST
+
+URL:
+http://localhost:8080/ords/alicuotas/api/periodos/crear/
+
+Body -> raw -> JSON:
+{
+  "mes": 9,
+  "anio": 2026,
+  "estado": "ABIERTO"
+}
+
+Valores sugeridos:
+estado: ABIERTO, CERRADO
+
+------------------------------------------------------------
+
+ACTUALIZAR PERIODO
+
+Metodo:
+PUT
+
+URL:
+http://localhost:8080/ords/alicuotas/api/periodos/actualizar/
+
+Body -> raw -> JSON:
+{
+  "id_periodo": 9,
+  "estado": "CERRADO"
+}
+
+------------------------------------------------------------
+
+CERRAR PERIODO
+
+Metodo:
+DELETE
+
+URL:
+http://localhost:8080/ords/alicuotas/api/periodos/eliminar/
+
+Body -> raw -> JSON:
+{
+  "id_periodo": 9
+}
+
+Nota:
+Este endpoint no borra el periodo. Lo cambia a CERRADO.
+
+============================================================
+6. ALICUOTAS
+============================================================
+
+LISTAR ALICUOTAS
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/alicuotas/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+MOSTRAR ALICUOTA POR ID
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/alicuotas/1/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+CREAR ALICUOTA INDIVIDUAL
+
+Metodo:
+POST
+
+URL:
+http://localhost:8080/ords/alicuotas/api/alicuotas/crear/
+
+Body -> raw -> JSON:
+{
+  "id_vivienda": 51,
+  "id_periodo": 9,
+  "valor": 45,
+  "fecha_limite": "2026-09-10",
+  "estado": "PENDIENTE",
+  "observacion": "Alicuota mensual de septiembre"
+}
+
+Valores sugeridos:
+estado: PENDIENTE, PAGADA, VENCIDA, ANULADA
+
+------------------------------------------------------------
+
+GENERAR ALICUOTAS MENSUALES PARA TODAS LAS VIVIENDAS
+
+Metodo:
+POST
+
+URL:
+http://localhost:8080/ords/alicuotas/api/alicuotas/generar-mensual/
+
+Body -> raw -> JSON:
+{
+  "mes": 10,
+  "anio": 2026,
+  "valor": 45
+}
+
+Explicacion:
+Este endpoint usa el procedimiento PL/SQL pr_generar_alicuotas_mensuales.
+Sirve para crear automaticamente alicuotas para todas las viviendas activas del mes indicado.
+
+------------------------------------------------------------
+
+ACTUALIZAR ALICUOTA
+
+Metodo:
+PUT
+
+URL:
+http://localhost:8080/ords/alicuotas/api/alicuotas/actualizar/
+
+Body -> raw -> JSON:
+{
+  "id_alicuota": 10,
+  "fecha_limite": "2026-09-15",
+  "estado": "VENCIDA",
+  "observacion": "Actualizacion de fecha limite"
+}
+
+------------------------------------------------------------
+
+ANULAR ALICUOTA
+
+Metodo:
+DELETE
+
+URL:
+http://localhost:8080/ords/alicuotas/api/alicuotas/anular/
+
+Body -> raw -> JSON:
+{
+  "id_alicuota": 10
+}
+
+Nota:
+Este endpoint no borra fisicamente. Cambia el estado de la alicuota a ANULADA.
+
+============================================================
+7. PAGOS
+============================================================
+
+LISTAR PAGOS
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/pagos/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+MOSTRAR PAGO POR ID
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/pagos/1/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+REGISTRAR PAGO
+
+Metodo:
+POST
+
+URL:
+http://localhost:8080/ords/alicuotas/api/pagos/registrar/
+
+Body -> raw -> JSON:
+{
+  "id_alicuota": 10,
+  "valor_pagado": 45,
+  "metodo_pago": "EFECTIVO",
+  "referencia": "REC-001"
+}
+
+Valores sugeridos:
+metodo_pago: EFECTIVO, TRANSFERENCIA, DEPOSITO, TARJETA
+
+Explicacion:
+Al registrar un pago:
+1. Se inserta un registro en PAGO.
+2. Se registra un ingreso en CAJA_MOVIMIENTO.
+3. Si el pago cubre el valor, la alicuota cambia a PAGADA.
+4. Los triggers guardan auditoria.
+
+------------------------------------------------------------
+
+ACTUALIZAR DATOS DE PAGO
+
+Metodo:
+PUT
+
+URL:
+http://localhost:8080/ords/alicuotas/api/pagos/actualizar/
+
+Body -> raw -> JSON:
+{
+  "id_pago": 1,
+  "metodo_pago": "TRANSFERENCIA",
+  "referencia": "TRX-2026-001"
+}
+
+------------------------------------------------------------
+
+ELIMINAR PAGO
+
+Metodo:
+DELETE
+
+URL:
+http://localhost:8080/ords/alicuotas/api/pagos/eliminar/
+
+Body:
+No lleva.
+
+Nota:
+El endpoint esta protegido. No elimina pagos porque eso descuadra caja y auditoria.
+Para exposicion se dice que en sistemas financieros no se borra un pago; se maneja reverso contable.
+
+============================================================
+8. EGRESOS
+============================================================
+
+LISTAR EGRESOS
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/egresos/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+MOSTRAR EGRESO POR ID
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/egresos/1/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+REGISTRAR EGRESO
+
+Metodo:
+POST
+
+URL:
+http://localhost:8080/ords/alicuotas/api/egresos/registrar/
+
+Body -> raw -> JSON:
+{
+  "categoria": "Mantenimiento",
+  "descripcion": "Mantenimiento de la puerta principal de ingreso",
+  "valor": 120,
+  "responsable": "Joaquin Astudillo"
+}
+
+Explicacion:
+Al registrar un egreso:
+1. Se inserta un registro en EGRESO.
+2. Se registra una salida en CAJA_MOVIMIENTO.
+3. Baja el saldo de caja.
+4. Los triggers guardan auditoria.
+
+------------------------------------------------------------
+
+ACTUALIZAR EGRESO
+
+Metodo:
+PUT
+
+URL:
+http://localhost:8080/ords/alicuotas/api/egresos/actualizar/
+
+Body -> raw -> JSON:
+{
+  "id_egreso": 1,
+  "categoria": "Mantenimiento",
+  "descripcion": "Cambio de motor de puerta principal",
+  "responsable": "Joaquin Astudillo"
+}
+
+------------------------------------------------------------
+
+ELIMINAR EGRESO
+
+Metodo:
+DELETE
+
+URL:
+http://localhost:8080/ords/alicuotas/api/egresos/eliminar/
+
+Body:
+No lleva.
+
+Nota:
+El endpoint esta protegido. No elimina egresos porque forman parte de caja y auditoria.
+Para exposicion se dice que se maneja reverso contable.
+
+============================================================
+9. CAJA Y MOVIMIENTOS
+============================================================
+
+LISTAR MOVIMIENTOS DE CAJA
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/caja-movimientos/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+CONSULTAR SALDO DE CAJA
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/saldo-caja/
+
+Body:
+No lleva.
+
+Explicacion:
+El saldo de caja se calcula con ingresos por pagos menos egresos.
+
+============================================================
+10. AUDITORIA
+============================================================
+
+LISTAR AUDITORIA
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/auditoria/
+
+Body:
+No lleva.
+
+Explicacion:
+La auditoria se llena automaticamente con triggers cuando ocurren pagos, egresos o cambios importantes.
+
+============================================================
+11. CONSULTAS IA / LENGUAJE NATURAL
+============================================================
+
+LISTAR CONSULTAS IA
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/consultas-ia/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+PROCESAR CONSULTA IA
+
+Metodo:
+POST
+
+URL:
+http://localhost:8080/ords/alicuotas/api/consultas-ia/procesar/
+
+Body -> raw -> JSON:
+{
+  "pregunta": "Dame un listado de las personas que deben en septiembre y diciembre y que comiencen con el apellido A"
+}
+
+Explicacion:
+El procedimiento PL/SQL interpreta la pregunta, genera SQL y guarda la evidencia en CONSULTA_IA.
+
+============================================================
+12. REPORTES Y CONSULTAS PRINCIPALES
+============================================================
+
+LISTAR DEUDORES
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/deudores/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+DEUDORES POR LETRA Y MESES
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/deudores/filtro/A/9/12/
+
+Body:
+No lleva.
+
+Explicacion:
+A = apellidos que empiezan con A
+9 = septiembre
+12 = diciembre
+
+Pregunta que representa:
+Dame un listado de las personas que deben en septiembre y diciembre y que comiencen con el apellido A.
+
+------------------------------------------------------------
+
+DEUDA TOTAL POR PROPIETARIO
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/deuda-propietarios/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+RECAUDACION MENSUAL
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/recaudacion-mensual/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+TOP DEUDORES
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/top-deudores/
+
+Body:
+No lleva.
+
+------------------------------------------------------------
+
+REPORTE FINANCIERO JSON
+
+Metodo:
+GET
+
+URL:
+http://localhost:8080/ords/alicuotas/api/reporte-financiero-json/
+
+Body:
+No lleva.
+
+============================================================
+EJEMPLO DE DEMOSTRACION COMPLETA EN POSTMAN
+============================================================
+
+1. Probar API:
+GET http://localhost:8080/ords/alicuotas/api/info/
+
+2. Listar propietarios:
+GET http://localhost:8080/ords/alicuotas/api/propietarios/
+
+3. Crear propietario:
+POST http://localhost:8080/ords/alicuotas/api/propietarios/crear/
+
+4. Crear vivienda:
+POST http://localhost:8080/ords/alicuotas/api/viviendas/crear/
+
+5. Crear periodo:
+POST http://localhost:8080/ords/alicuotas/api/periodos/crear/
+
+6. Generar alicuotas del mes:
+POST http://localhost:8080/ords/alicuotas/api/alicuotas/generar-mensual/
+
+7. Registrar pago:
+POST http://localhost:8080/ords/alicuotas/api/pagos/registrar/
+
+8. Registrar egreso:
+POST http://localhost:8080/ords/alicuotas/api/egresos/registrar/
+
+9. Ver saldo de caja:
+GET http://localhost:8080/ords/alicuotas/api/saldo-caja/
+
+10. Ver deudores:
+GET http://localhost:8080/ords/alicuotas/api/deudores/filtro/A/9/12/
+
+============================================================
+FRASE PARA EXPLICAR EN EXPOSICION
+============================================================
+
+La API REST fue construida con ORDS sobre Oracle. Permite consultar, crear, actualizar e inactivar registros principales como propietarios, viviendas, periodos y alicuotas. Tambien permite registrar pagos y egresos, los cuales impactan automaticamente en la caja. Los reportes permiten visualizar deudores, recaudacion mensual, saldo de caja y top de deudores. Ademas, se integran triggers para auditoria y un modulo de lenguaje natural preparado para consultas tipo IA.

@@ -1,0 +1,203 @@
+------------------------------------------------------------
+-- 03_CONSULTAS_AVANZADAS.sql
+-- Proyecto: Sistema Inteligente de Gestión de Alícuotas
+-----------------------------------------------------------
+------------------------------------------------------------
+-- CONSULTA 1
+-- Personas que deben en septiembre y diciembre
+-- y cuyo apellido inicia con la letra A.
+------------------------------------------------------------
+SELECT 
+    p.apellidos,
+    p.nombres,
+    v.numero_vivienda,
+    pe.mes,
+    pe.anio,
+    a.valor,
+    a.estado
+FROM propietario p
+JOIN vivienda v ON p.id_propietario = v.id_propietario
+JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+JOIN periodo pe ON a.id_periodo = pe.id_periodo
+WHERE a.estado IN ('PENDIENTE', 'VENCIDA')
+  AND pe.mes IN (9, 12)
+  AND UPPER(p.apellidos) LIKE 'A%'
+ORDER BY p.apellidos, pe.mes;
+
+------------------------------------------------------------
+-- CONSULTA 2
+-- Total de deuda acumulada por propietario.
+------------------------------------------------------------
+SELECT 
+    p.id_propietario,
+    p.apellidos || ' ' || p.nombres AS propietario,
+    v.numero_vivienda,
+    COUNT(a.id_alicuota) AS cuotas_pendientes,
+    SUM(a.valor) AS deuda_total
+FROM propietario p
+JOIN vivienda v ON p.id_propietario = v.id_propietario
+JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+WHERE a.estado IN ('PENDIENTE', 'VENCIDA')
+GROUP BY p.id_propietario, p.apellidos, p.nombres, v.numero_vivienda
+ORDER BY deuda_total DESC;
+
+------------------------------------------------------------
+-- CONSULTA 3
+-- Total recaudado por mes.
+------------------------------------------------------------
+SELECT 
+    pe.anio,
+    pe.mes,
+    SUM(pa.valor_pagado) AS total_recaudado
+FROM pago pa
+JOIN alicuota a ON pa.id_alicuota = a.id_alicuota
+JOIN periodo pe ON a.id_periodo = pe.id_periodo
+GROUP BY pe.anio, pe.mes
+ORDER BY pe.anio, pe.mes;
+
+------------------------------------------------------------
+-- CONSULTA 4
+-- Propietarios con más de dos alícuotas vencidas.
+------------------------------------------------------------
+SELECT 
+    p.apellidos,
+    p.nombres,
+    v.numero_vivienda,
+    COUNT(a.id_alicuota) AS total_vencidas,
+    SUM(a.valor) AS valor_vencido
+FROM propietario p
+JOIN vivienda v ON p.id_propietario = v.id_propietario
+JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+WHERE a.estado = 'VENCIDA'
+GROUP BY p.apellidos, p.nombres, v.numero_vivienda
+HAVING COUNT(a.id_alicuota) > 2
+ORDER BY total_vencidas DESC;
+
+------------------------------------------------------------
+-- CONSULTA 5
+-- Saldo actual de caja: ingresos menos egresos.
+------------------------------------------------------------
+SELECT 
+    SUM(CASE 
+            WHEN tipo_movimiento = 'INGRESO' THEN valor
+            WHEN tipo_movimiento = 'EGRESO' THEN -valor
+        END) AS saldo_actual_caja
+FROM caja_movimiento;
+
+------------------------------------------------------------
+-- CONSULTA 6
+-- Ingresos y egresos agrupados por mes.
+------------------------------------------------------------
+SELECT 
+    EXTRACT(YEAR FROM fecha_movimiento) AS anio,
+    EXTRACT(MONTH FROM fecha_movimiento) AS mes,
+    SUM(CASE WHEN tipo_movimiento = 'INGRESO' THEN valor ELSE 0 END) AS total_ingresos,
+    SUM(CASE WHEN tipo_movimiento = 'EGRESO' THEN valor ELSE 0 END) AS total_egresos,
+    SUM(CASE 
+            WHEN tipo_movimiento = 'INGRESO' THEN valor
+            ELSE -valor
+        END) AS saldo_mensual
+FROM caja_movimiento
+GROUP BY 
+    EXTRACT(YEAR FROM fecha_movimiento),
+    EXTRACT(MONTH FROM fecha_movimiento)
+ORDER BY anio, mes;
+
+------------------------------------------------------------
+-- CONSULTA 7
+-- Estado de alícuotas por mes.
+------------------------------------------------------------
+SELECT 
+    pe.anio,
+    pe.mes,
+    a.estado,
+    COUNT(*) AS cantidad,
+    SUM(a.valor) AS valor_total
+FROM alicuota a
+JOIN periodo pe ON a.id_periodo = pe.id_periodo
+GROUP BY pe.anio, pe.mes, a.estado
+ORDER BY pe.anio, pe.mes, a.estado;
+
+------------------------------------------------------------
+-- CONSULTA 8
+-- Recaudación por método de pago.
+------------------------------------------------------------
+SELECT 
+    metodo_pago,
+    COUNT(*) AS cantidad_pagos,
+    SUM(valor_pagado) AS total_recaudado
+FROM pago
+GROUP BY metodo_pago
+ORDER BY total_recaudado DESC;
+
+------------------------------------------------------------
+-- CONSULTA 9
+-- Deuda por manzana de la urbanización.
+------------------------------------------------------------
+SELECT 
+    v.manzana,
+    COUNT(a.id_alicuota) AS cuotas_deuda,
+    SUM(a.valor) AS deuda_total
+FROM vivienda v
+JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+WHERE a.estado IN ('PENDIENTE', 'VENCIDA')
+GROUP BY v.manzana
+ORDER BY deuda_total DESC;
+
+------------------------------------------------------------
+-- CONSULTA 10
+-- Top 10 viviendas con mayor deuda.
+------------------------------------------------------------
+SELECT *
+FROM (
+    SELECT 
+        v.numero_vivienda,
+        v.manzana,
+        p.apellidos || ' ' || p.nombres AS propietario,
+        COUNT(a.id_alicuota) AS cuotas_deuda,
+        SUM(a.valor) AS deuda_total
+    FROM propietario p
+    JOIN vivienda v ON p.id_propietario = v.id_propietario
+    JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+    WHERE a.estado IN ('PENDIENTE', 'VENCIDA')
+    GROUP BY v.numero_vivienda, v.manzana, p.apellidos, p.nombres
+    ORDER BY deuda_total DESC
+)
+WHERE ROWNUM <= 10;
+
+------------------------------------------------------------
+-- CONSULTA 11
+-- Propietarios activos con deudas pendientes.
+------------------------------------------------------------
+SELECT 
+    p.apellidos,
+    p.nombres,
+    p.telefono,
+    p.correo,
+    v.numero_vivienda,
+    SUM(a.valor) AS deuda_total
+FROM propietario p
+JOIN vivienda v ON p.id_propietario = v.id_propietario
+JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+WHERE p.estado = 'ACTIVO'
+  AND a.estado IN ('PENDIENTE', 'VENCIDA')
+GROUP BY p.apellidos, p.nombres, p.telefono, p.correo, v.numero_vivienda
+ORDER BY p.apellidos;
+
+------------------------------------------------------------
+-- CONSULTA 12
+-- Reporte general de gestión financiera.
+------------------------------------------------------------
+SELECT 
+    (SELECT COUNT(*) FROM propietario) AS total_propietarios,
+    (SELECT COUNT(*) FROM vivienda) AS total_viviendas,
+    (SELECT COUNT(*) FROM alicuota WHERE estado = 'PAGADA') AS alicuotas_pagadas,
+    (SELECT COUNT(*) FROM alicuota WHERE estado IN ('PENDIENTE', 'VENCIDA')) AS alicuotas_por_cobrar,
+    (SELECT NVL(SUM(valor_pagado), 0) FROM pago) AS total_recaudado,
+    (SELECT NVL(SUM(valor), 0) FROM egreso) AS total_egresos,
+    (
+        (SELECT NVL(SUM(valor_pagado), 0) FROM pago)
+        -
+        (SELECT NVL(SUM(valor), 0) FROM egreso)
+    ) AS saldo_estimado
+FROM dual;
