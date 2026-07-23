@@ -1,0 +1,395 @@
+------------------------------------------------------------
+-- 15_FRONTEND_Y_CONSULTAS_PRO_ORDS.sql
+-- Proyecto: Sistema Inteligente de Gestión de Alícuotas
+-- Autor: Joaquín Astudillo
+--
+-- Ejecutar en SQL Developer conectado como:
+-- PROY_ALICUOTAS_ASTUDILLO
+--
+-- Frontend final:
+-- http://localhost:8080/ords/alicuotas/api/panel/
+------------------------------------------------------------
+
+SET SERVEROUTPUT ON;
+
+------------------------------------------------------------
+-- CONSULTA 1: Deudores apellido A en septiembre y diciembre
+-- URL:
+-- http://localhost:8080/ords/alicuotas/api/consulta-1-deudores-a/
+------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'consulta-1-deudores-a/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'consulta-1-deudores-a/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+            SELECT
+                p.id_propietario,
+                p.apellidos,
+                p.nombres,
+                v.numero_vivienda,
+                v.manzana,
+                pe.mes,
+                pe.anio,
+                a.valor,
+                a.estado,
+                a.fecha_limite
+            FROM propietario p
+            INNER JOIN vivienda v ON p.id_propietario = v.id_propietario
+            INNER JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+            INNER JOIN periodo pe ON a.id_periodo = pe.id_periodo
+            WHERE a.estado IN ('PENDIENTE', 'VENCIDA')
+              AND pe.mes IN (9, 12)
+              AND UPPER(p.apellidos) LIKE 'A%'
+            ORDER BY p.apellidos, p.nombres, pe.mes
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+------------------------------------------------------------
+-- CONSULTA 2: Deuda acumulada por propietario
+-- URL:
+-- http://localhost:8080/ords/alicuotas/api/consulta-2-deuda-propietario/
+------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'consulta-2-deuda-propietario/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'consulta-2-deuda-propietario/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+            SELECT
+                p.id_propietario,
+                p.apellidos || ' ' || p.nombres AS propietario,
+                COUNT(a.id_alicuota) AS cuotas_pendientes,
+                SUM(a.valor) AS deuda_total
+            FROM propietario p
+            INNER JOIN vivienda v ON p.id_propietario = v.id_propietario
+            INNER JOIN alicuota a ON v.id_vivienda = a.id_vivienda
+            WHERE a.estado IN ('PENDIENTE', 'VENCIDA')
+            GROUP BY p.id_propietario, p.apellidos, p.nombres
+            ORDER BY deuda_total DESC
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+------------------------------------------------------------
+-- CONSULTA 3: Recaudación mensual
+-- URL:
+-- http://localhost:8080/ords/alicuotas/api/consulta-3-recaudacion-mensual/
+------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'consulta-3-recaudacion-mensual/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'consulta-3-recaudacion-mensual/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+            SELECT
+                pe.anio,
+                pe.mes,
+                COUNT(pg.id_pago) AS numero_pagos,
+                SUM(pg.valor_pagado) AS total_recaudado
+            FROM pago pg
+            INNER JOIN alicuota a ON pg.id_alicuota = a.id_alicuota
+            INNER JOIN periodo pe ON a.id_periodo = pe.id_periodo
+            GROUP BY pe.anio, pe.mes
+            ORDER BY pe.anio, pe.mes
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+------------------------------------------------------------
+-- CONSULTA 4: Saldo actual de caja
+-- URL:
+-- http://localhost:8080/ords/alicuotas/api/consulta-4-saldo-caja/
+------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'consulta-4-saldo-caja/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'consulta-4-saldo-caja/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+            SELECT
+                NVL(SUM(CASE WHEN tipo_movimiento = 'INGRESO' THEN valor ELSE 0 END), 0) AS total_ingresos,
+                NVL(SUM(CASE WHEN tipo_movimiento = 'EGRESO' THEN valor ELSE 0 END), 0) AS total_egresos,
+                NVL(SUM(CASE
+                    WHEN tipo_movimiento = 'INGRESO' THEN valor
+                    WHEN tipo_movimiento = 'EGRESO' THEN -valor
+                    ELSE 0
+                END), 0) AS saldo_actual
+            FROM caja_movimiento
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+------------------------------------------------------------
+-- CONSULTA 5: Egresos agrupados por categoría
+-- URL:
+-- http://localhost:8080/ords/alicuotas/api/consulta-5-egresos-categoria/
+------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'consulta-5-egresos-categoria/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'consulta-5-egresos-categoria/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_query,
+        p_source      => q'[
+            SELECT
+                categoria,
+                COUNT(id_egreso) AS cantidad_egresos,
+                SUM(valor) AS total_gastado,
+                ROUND(AVG(valor), 2) AS promedio_gasto
+            FROM egreso
+            GROUP BY categoria
+            ORDER BY total_gastado DESC
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+------------------------------------------------------------
+-- FRONTEND WEB
+-- URL:
+-- http://localhost:8080/ords/alicuotas/api/panel/
+------------------------------------------------------------
+BEGIN
+    ORDS.DEFINE_TEMPLATE(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'panel/'
+    );
+
+    ORDS.DEFINE_HANDLER(
+        p_module_name => 'mod_alicuotas_api',
+        p_pattern     => 'panel/',
+        p_method      => 'GET',
+        p_source_type => ORDS.source_type_plsql,
+        p_source      => q'[
+BEGIN
+    OWA_UTIL.MIME_HEADER('text/html; charset=UTF-8', FALSE);
+    OWA_UTIL.HTTP_HEADER_CLOSE;
+    HTP.P(q'~<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Panel Web - Sistema de Alícuotas</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f4f6f8;color:#1f2937}
+header{background:#12395b;color:white;padding:24px 34px}
+header h1{margin:0;font-size:27px}
+header p{margin:8px 0 0;opacity:.92}
+main{width:min(1200px,94vw);margin:24px auto;display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.card{background:white;border:1px solid #d7dce2;border-radius:12px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.full{grid-column:1/-1}
+h2{margin-top:0;color:#12395b}
+h3{margin-bottom:6px;color:#374151}
+button{background:#12395b;color:white;border:0;border-radius:8px;padding:10px 14px;font-weight:bold;cursor:pointer;margin:4px 4px 8px 0}
+button:hover{background:#0b2943}
+input,select{width:100%;padding:9px;border:1px solid #cfd6df;border-radius:8px;margin:5px 0 9px;font-size:14px}
+pre{background:#101827;color:#d1fae5;border-radius:10px;padding:16px;min-height:260px;overflow:auto;white-space:pre-wrap}
+.url{font-size:13px;background:#eef2f7;border:1px solid #d7dce2;padding:8px;border-radius:8px;word-break:break-all;color:#374151}
+.note{font-size:14px;color:#6b7280}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(max-width:850px){main{grid-template-columns:1fr}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<h1>Sistema Inteligente de Gestión de Alícuotas</h1>
+<p>Panel web servido desde ORDS para ejecutar consultas avanzadas y operaciones básicas.</p>
+</header>
+
+<main>
+<section class="card full">
+<h2>Estado de la API</h2>
+<p class="note">Este frontend se ejecuta desde el mismo ORDS, por eso evita problemas de CORS.</p>
+<button onclick="ejecutar('info/')">Probar API /info/</button>
+<button onclick="limpiar()">Limpiar respuesta</button>
+</section>
+
+<section class="card full">
+<h2>Consultas personalizadas con URL</h2>
+<div class="grid">
+<div><h3>Consulta 1</h3><p>Propietarios con apellido A que deben en septiembre y diciembre.</p><div class="url">http://localhost:8080/ords/alicuotas/api/consulta-1-deudores-a/</div><button onclick="ejecutar('consulta-1-deudores-a/')">Ejecutar consulta 1</button></div>
+<div><h3>Consulta 2</h3><p>Deuda acumulada por propietario.</p><div class="url">http://localhost:8080/ords/alicuotas/api/consulta-2-deuda-propietario/</div><button onclick="ejecutar('consulta-2-deuda-propietario/')">Ejecutar consulta 2</button></div>
+<div><h3>Consulta 3</h3><p>Recaudación mensual.</p><div class="url">http://localhost:8080/ords/alicuotas/api/consulta-3-recaudacion-mensual/</div><button onclick="ejecutar('consulta-3-recaudacion-mensual/')">Ejecutar consulta 3</button></div>
+<div><h3>Consulta 4</h3><p>Saldo actual de caja.</p><div class="url">http://localhost:8080/ords/alicuotas/api/consulta-4-saldo-caja/</div><button onclick="ejecutar('consulta-4-saldo-caja/')">Ejecutar consulta 4</button></div>
+<div><h3>Consulta 5</h3><p>Egresos agrupados por categoría.</p><div class="url">http://localhost:8080/ords/alicuotas/api/consulta-5-egresos-categoria/</div><button onclick="ejecutar('consulta-5-egresos-categoria/')">Ejecutar consulta 5</button></div>
+</div>
+</section>
+
+<section class="card">
+<h2>CRUD rápido - Propietarios</h2>
+<button onclick="ejecutar('propietarios/')">Mostrar propietarios</button>
+<h3>Crear propietario</h3>
+<form id="crearProp">
+<input name="cedula" value="0109999999" placeholder="Cédula">
+<input name="nombres" value="Juan" placeholder="Nombres">
+<input name="apellidos" value="Arias" placeholder="Apellidos">
+<input name="telefono" value="0999999999" placeholder="Teléfono">
+<input name="correo" value="juan.arias@gmail.com" placeholder="Correo">
+<button>Crear</button>
+</form>
+<h3>Actualizar propietario</h3>
+<form id="actProp">
+<input name="id_propietario" value="51" placeholder="ID propietario">
+<input name="cedula" value="0109999999" placeholder="Cédula">
+<input name="nombres" value="Juan Carlos" placeholder="Nombres">
+<input name="apellidos" value="Arias" placeholder="Apellidos">
+<input name="telefono" value="0988888888" placeholder="Teléfono">
+<input name="correo" value="juan.actualizado@gmail.com" placeholder="Correo">
+<select name="estado"><option>ACTIVO</option><option>INACTIVO</option></select>
+<button>Actualizar</button>
+</form>
+<h3>Inactivar propietario</h3>
+<form id="delProp">
+<input name="id_propietario" value="51" placeholder="ID propietario">
+<button>Inactivar</button>
+</form>
+</section>
+
+<section class="card">
+<h2>Operaciones principales</h2>
+<h3>Crear vivienda</h3>
+<form id="crearViv">
+<input name="id_urbanizacion" value="1" placeholder="ID urbanización">
+<input name="id_propietario" value="51" placeholder="ID propietario">
+<input name="numero_vivienda" value="A-21" placeholder="Número vivienda">
+<input name="manzana" value="A" placeholder="Manzana">
+<select name="tipo_vivienda"><option>CASA</option><option>DEPARTAMENTO</option><option>LOCAL</option></select>
+<select name="estado"><option>HABITADA</option><option>DESOCUPADA</option><option>EN_CONSTRUCCION</option></select>
+<button>Crear vivienda</button>
+</form>
+<h3>Generar alícuotas mensuales</h3>
+<form id="genAli">
+<input name="mes" value="10" placeholder="Mes">
+<input name="anio" value="2026" placeholder="Año">
+<input name="valor" value="45" placeholder="Valor">
+<button>Generar alícuotas</button>
+</form>
+<h3>Registrar pago</h3>
+<form id="pago">
+<input name="id_alicuota" value="10" placeholder="ID alícuota">
+<input name="valor_pagado" value="45" placeholder="Valor pagado">
+<select name="metodo_pago"><option>EFECTIVO</option><option>TRANSFERENCIA</option><option>DEPOSITO</option><option>TARJETA</option></select>
+<input name="referencia" value="REC-001" placeholder="Referencia">
+<button>Registrar pago</button>
+</form>
+<h3>Registrar egreso</h3>
+<form id="egreso">
+<input name="categoria" value="Mantenimiento" placeholder="Categoría">
+<input name="descripcion" value="Mantenimiento de la puerta principal" placeholder="Descripción">
+<input name="valor" value="120" placeholder="Valor">
+<input name="responsable" value="Joaquín Astudillo" placeholder="Responsable">
+<button>Registrar egreso</button>
+</form>
+</section>
+
+<section class="card full">
+<h2>Respuesta</h2>
+<pre id="respuesta">Aquí aparecerá la respuesta JSON.</pre>
+</section>
+</main>
+
+<script>
+function mostrar(x){document.getElementById('respuesta').textContent=typeof x==='string'?x:JSON.stringify(x,null,2)}
+function limpiar(){mostrar('Aquí aparecerá la respuesta JSON.')}
+function formJson(form){const data={}; const fd=new FormData(form); for(const [k,v] of fd.entries()){if(v==='')continue; const t=String(v).trim(); data[k]=(t!==''&&!isNaN(t))?Number(t):v;} return data;}
+async function ejecutar(path,metodo='GET',body=null){try{mostrar('Ejecutando '+metodo+' '+path); const opt={method:metodo,headers:{}}; if(body){opt.headers['Content-Type']='application/json'; opt.body=JSON.stringify(body);} const r=await fetch(path,opt); const txt=await r.text(); let data; try{data=JSON.parse(txt)}catch(e){data=txt} mostrar({status:r.status, ok:r.ok, respuesta:data});}catch(e){mostrar({estado:'ERROR', mensaje:e.message});}}
+function bind(id,path,method){const f=document.getElementById(id); f.addEventListener('submit',function(e){e.preventDefault(); ejecutar(path,method,formJson(f));});}
+bind('crearProp','propietarios/crear/','POST');
+bind('actProp','propietarios/actualizar/','PUT');
+bind('delProp','propietarios/eliminar/','DELETE');
+bind('crearViv','viviendas/crear/','POST');
+bind('genAli','alicuotas/generar-mensual/','POST');
+bind('pago','pagos/registrar/','POST');
+bind('egreso','egresos/registrar/','POST');
+</script>
+</body>
+</html>~');
+END;
+        ]'
+    );
+
+    COMMIT;
+END;
+/
+
+------------------------------------------------------------
+-- VERIFICACIÓN FINAL
+------------------------------------------------------------
+SELECT uri_template
+FROM user_ords_templates
+WHERE uri_template IN (
+    'panel/',
+    'consulta-1-deudores-a/',
+    'consulta-2-deuda-propietario/',
+    'consulta-3-recaudacion-mensual/',
+    'consulta-4-saldo-caja/',
+    'consulta-5-egresos-categoria/'
+)
+ORDER BY uri_template;
+
+------------------------------------------------------------
+-- URLS FINALES
+------------------------------------------------------------
+-- FRONTEND:
+-- http://localhost:8080/ords/alicuotas/api/panel/
+--
+-- CONSULTA 1:
+-- http://localhost:8080/ords/alicuotas/api/consulta-1-deudores-a/
+--
+-- CONSULTA 2:
+-- http://localhost:8080/ords/alicuotas/api/consulta-2-deuda-propietario/
+--
+-- CONSULTA 3:
+-- http://localhost:8080/ords/alicuotas/api/consulta-3-recaudacion-mensual/
+--
+-- CONSULTA 4:
+-- http://localhost:8080/ords/alicuotas/api/consulta-4-saldo-caja/
+--
+-- CONSULTA 5:
+-- http://localhost:8080/ords/alicuotas/api/consulta-5-egresos-categoria/
+------------------------------------------------------------
